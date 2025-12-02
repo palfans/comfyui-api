@@ -561,89 +561,14 @@ async def generate_images(
 
 @app.post("/v1/images/edits", response_model=ImageGenerationResponse)
 async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)):
-    """Image to image (img2img) - OpenAI compatible"""
+    """Image to image (img2img) - OpenAI compatible [PLACEHOLDER]"""
     verify_api_key(authorization)
-
-    if workflow_manager.img2img_template is None:
-        raise HTTPException(status_code=500, detail="img2img workflow not configured")
-
-    # Validate response_format
-    if request.response_format != "b64_json":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}",
-        )
-
-    # Validate image data
-    try:
-        image_data = base64.b64decode(request.image)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid base64 image: {e}")
-
-    # Parse and validate parameters
-    n = clamp_n(request.n)
-    strength = clamp_strength(request.strength)
-
-    print(
-        f"[img2img] prompt='{request.prompt[:50]}...', n={n}, strength={strength}"
+    
+    # img2img backend model not yet available
+    raise HTTPException(
+        status_code=501,
+        detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available."
     )
-
-    start_time = time.time()
-
-    async def generate_single_edit(index: int):
-        filename = f"input_{int(time.time())}_{index}.png"
-        uploaded_name = await comfyui_client.upload_image(image_data, filename)
-        print(f"[img2img] Task {index + 1}/{n}: uploaded={uploaded_name}")
-
-        seed = int(time.time() * 1000 + index) % (2**32)
-        workflow = workflow_manager.prepare_img2img(
-            prompt=request.prompt,
-            image_name=uploaded_name,
-            strength=strength,
-            seed=seed,
-        )
-
-        prompt_id = await comfyui_client.queue_prompt(workflow)
-        print(f"[img2img] Task {index + 1}/{n}: prompt_id={prompt_id}, seed={seed}")
-
-        result = await comfyui_client.wait_for_completion(prompt_id)
-
-        outputs = result.get("outputs", {})
-        for node_id, node_output in outputs.items():
-            if "images" in node_output:
-                for img_info in node_output["images"]:
-                    result_image = await comfyui_client.get_image(
-                        filename=img_info["filename"],
-                        subfolder=img_info.get("subfolder", ""),
-                        folder_type=img_info.get("type", "output"),
-                    )
-                    b64_data = base64.b64encode(result_image).decode("utf-8")
-                    return ImageData(
-                        b64_json=b64_data, revised_prompt=request.prompt
-                    )
-        return None
-
-    # Execute edits concurrently
-    if n <= MAX_CONCURRENT_GENERATIONS:
-        tasks = [generate_single_edit(i) for i in range(n)]
-        generated_images = await asyncio.gather(*tasks)
-    else:
-        generated_images = []
-        for i in range(0, n, MAX_CONCURRENT_GENERATIONS):
-            batch_size = min(MAX_CONCURRENT_GENERATIONS, n - i)
-            tasks = [generate_single_edit(i + j) for j in range(batch_size)]
-            batch_results = await asyncio.gather(*tasks)
-            generated_images.extend(batch_results)
-
-    generated_images = [img for img in generated_images if img is not None]
-
-    elapsed = time.time() - start_time
-    print(f"[img2img] Completed {len(generated_images)}/{n} images in {elapsed:.2f}s")
-
-    if not generated_images:
-        raise HTTPException(status_code=500, detail="Failed to generate image")
-
-    return ImageGenerationResponse(created=int(time.time()), data=generated_images)
 
 
 @app.post("/v1/images/img2img", response_model=ImageGenerationResponse)
@@ -655,62 +580,26 @@ async def img2img_form(
     n: int = Form(DEFAULT_N),
     authorization: str = Header(None),
 ):
-    """Image to image with form upload"""
+    """Image to image with form upload [PLACEHOLDER]"""
     verify_api_key(authorization)
-
-    if workflow_manager.img2img_template is None:
-        raise HTTPException(status_code=500, detail="img2img workflow not configured")
-
-    # Validate parameters
-    n = clamp_n(n)
-    strength = clamp_strength(strength)
-
-    print(f"[img2img-form] prompt='{prompt[:50]}...', n={n}, strength={strength}")
-
-    image_data = await image.read()
-    generated_images = []
-
-    for i in range(n):
-        filename = f"input_{int(time.time())}_{i}.png"
-        uploaded_name = await comfyui_client.upload_image(image_data, filename)
-        print(f"[img2img-form] Task {i + 1}/{n}: uploaded={uploaded_name}")
-
-        seed = int(time.time() * 1000 + i) % (2**32)
-        workflow = workflow_manager.prepare_img2img(
-            prompt=prompt, image_name=uploaded_name, strength=strength, seed=seed
-        )
-
-        prompt_id = await comfyui_client.queue_prompt(workflow)
-        print(f"[img2img-form] Task {i + 1}/{n}: prompt_id={prompt_id}, seed={seed}")
-
-        result = await comfyui_client.wait_for_completion(prompt_id)
-
-        outputs = result.get("outputs", {})
-        for node_id, node_output in outputs.items():
-            if "images" in node_output:
-                for img_info in node_output["images"]:
-                    result_image = await comfyui_client.get_image(
-                        filename=img_info["filename"],
-                        subfolder=img_info.get("subfolder", ""),
-                        folder_type=img_info.get("type", "output"),
-                    )
-                    b64_data = base64.b64encode(result_image).decode("utf-8")
-                    generated_images.append(
-                        ImageData(b64_json=b64_data, revised_prompt=prompt)
-                    )
-                    break
-            if len(generated_images) > i:
-                break
-
-    if not generated_images:
-        raise HTTPException(status_code=500, detail="Failed to generate image")
-
-    return ImageGenerationResponse(created=int(time.time()), data=generated_images)
+    
+    # img2img backend model not yet available
+    raise HTTPException(
+        status_code=501,
+        detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available."
+    )
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint with ComfyUI connectivity and workflow status"""
+    # Check if application is still initializing
+    if http_session is None or workflow_manager is None:
+        return {
+            "status": "initializing",
+            "message": "Application is starting up, please retry in a moment"
+        }
+    
     comfyui_reachable = False
     comfyui_error = None
 
@@ -771,6 +660,13 @@ async def chat_completions(
         raise HTTPException(
             status_code=400,
             detail="Streaming is not yet supported. Please set stream=false.",
+        )
+    
+    # Chat completions only supports single image generation
+    if request.n != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Chat completions only supports n=1. For multiple images, use /v1/images/generations.",
         )
 
     if workflow_manager.txt2img_template is None:

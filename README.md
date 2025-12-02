@@ -38,10 +38,10 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 | Endpoint | Method | Description | Status |
 |----------|--------|-------------|--------|
 | `/v1/images/generations` | POST | Text to image | ✅ |
-| `/v1/images/edits` | POST | Image to image | ✅ |
-| `/v1/images/img2img` | POST | Image to image (form) | ✅ |
+| `/v1/images/edits` | POST | Image to image | 🚧 Placeholder |
+| `/v1/images/img2img` | POST | Image to image (form) | 🚧 Placeholder |
 | `/v1/models` | GET | List models | ✅ |
-| `/v1/chat/completions` | POST | Chat with image gen | ✅ |
+| `/v1/chat/completions` | POST | Chat with image gen | ✅ (n=1 only) |
 | `/health` | GET | Health check | ✅ |
 | `/reload` | POST | Reload workflows | ✅ |
 
@@ -53,14 +53,6 @@ curl -X POST http://localhost:8000/v1/images/generations \
   -H "Authorization: Bearer sk-comfyui-z-image-turbo" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "a cute cat", "size": "1024x1024", "n": 1}'
-```
-
-### Image to Image
-```bash
-curl -X POST http://localhost:8000/v1/images/edits \
-  -H "Authorization: Bearer sk-comfyui-z-image-turbo" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "anime style", "image": "<base64>", "strength": 0.6}'
 ```
 
 ### Chat Completions (Image Generation)
@@ -100,8 +92,30 @@ Multiple images (n > 1) are generated concurrently (max 4 at a time) for better 
 ## Current Limitations
 
 - **Response Format**: Only `b64_json` is supported for image responses.
+- **Image-to-Image**: `/v1/images/edits` and `/v1/images/img2img` are placeholder endpoints (returns 501). Backend model not yet available.
+- **Chat Completions**: Only supports `n=1` for single image generation. For multiple images, use `/v1/images/generations`.
 - **Streaming**: Streaming responses are not yet supported (returns 400 if stream=true).
 - **Token Accuracy**: Token counting is a simple estimation (characters / 4), not exact.
+
+## WebUI
+
+A web interface is available at `index.html`. Simply open it in your browser:
+
+```bash
+# Start the API server
+uv run uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Open index.html in your browser
+open index.html  # macOS
+xdg-open index.html  # Linux
+start index.html  # Windows
+```
+
+Features:
+- **Text to Image**: Generate 1-4 images with various sizes
+- **Chat Completion**: Generate single image through chat interface
+- **Gallery**: View, download, and manage generated images
+- **Connection Test**: Verify API connectivity and health
 
 ## Configuration
 

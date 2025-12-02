@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI API Bridge - WebUI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            min-height: calc(100vh - 40px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #2d3748;
+            color: white;
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .version {
+            font-size: 12px;
+            color: #a0aec0;
+            margin-bottom: 30px;
+        }
+
+        .connection-section {
+            margin-bottom: 30px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid #4a5568;
+        }
+
+        .connection-section label {
+            display: block;
+            font-size: 12px;
+            color: #a0aec0;
+            margin-bottom: 5px;
+        }
+
+        .connection-section input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            background: #1a202c;
+            color: white;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #4a5568;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #718096;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .status.success {
+            background: rgba(72, 187, 120, 0.2);
+            color: #48bb78;
+        }
+
+        .status.error {
+            background: rgba(245, 101, 101, 0.2);
+            color: #f56565;
+        }
+
+        .status.initializing {
+            background: rgba(237, 137, 54, 0.2);
+            color: #ed8936;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .mode-section {
+            margin-bottom: 20px;
+        }
+
+        .mode-section h3 {
+            font-size: 14px;
+            color: #a0aec0;
+            margin-bottom: 10px;
+        }
+
+        .mode-tabs {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mode-tab {
+            padding: 10px 15px;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 6px;
+            color: #a0aec0;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .mode-tab:hover {
+            background: #2d3748;
+            border-color: #667eea;
+        }
+
+        .mode-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .mode-tab.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .mode-tab.disabled:hover {
+            background: #1a202c;
+            border-color: #4a5568;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #718096;
+        }
+
+        .form-section {
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background: #bee3f8;
+            color: #2c5282;
+            border-left: 4px solid #3182ce;
+        }
+
+        .alert-warning {
+            background: #feebc8;
+            color: #7c2d12;
+            border-left: 4px solid #ed8936;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .gallery-item {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .gallery-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            display: block;
+            background: #f7fafc;
+        }
+
+        .gallery-item-info {
+            padding: 15px;
+        }
+
+        .gallery-item-prompt {
+            font-size: 13px;
+            color: #2d3748;
+            margin-bottom: 10px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .gallery-item-meta {
+            font-size: 11px;
+            color: #718096;
+            margin-bottom: 10px;
+        }
+
+        .gallery-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-download {
+            background: #667eea;
+            color: white;
+            flex: 1;
+        }
+
+        .btn-download:hover {
+            background: #5568d3;
+        }
+
+        .btn-copy {
+            background: #e2e8f0;
+            color: #2d3748;
+            flex: 1;
+        }
+
+        .btn-copy:hover {
+            background: #cbd5e0;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #a0aec0;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                border-bottom: 1px solid #4a5568;
+            }
+
+            .gallery {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">ComfyUI API</div>
+            <div class="version">v2.0 Bridge</div>
+
+            <div class="connection-section">
+                <label>API Endpoint</label>
+                <input type="text" id="apiEndpoint" value="http://localhost:8000" placeholder="http://localhost:8000">
+                
+                <label>API Key</label>
+                <input type="password" id="apiKey" value="sk-comfyui-z-image-turbo" placeholder="sk-comfyui-z-image-turbo">
+                
+                <button class="btn btn-primary" onclick="testConnection()">
+                    <span id="testBtnText">Test Connection</span>
+                </button>
+                
+                <div id="connectionStatus" style="display: none;"></div>
+            </div>
+
+            <div class="mode-section">
+                <h3>Generation Mode</h3>
+                <div class="mode-tabs">
+                    <div class="mode-tab active" onclick="switchMode('txt2img')" data-mode="txt2img">
+                        📝 Text to Image
+                    </div>
+                    <div class="mode-tab" onclick="switchMode('chat')" data-mode="chat">
+                        💬 Chat Completion
+                    </div>
+                    <div class="mode-tab disabled" title="Backend model not available">
+                        🎨 Image to Image (Coming Soon)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <h1 id="modeTitle">Text to Image</h1>
+                <p id="modeDesc">Generate images from text prompts using ComfyUI backend</p>
+            </div>
+
+            <!-- Text to Image Form -->
+            <div id="txt2imgForm" class="form-section">
+                <div class="alert alert-info">
+                    Only <strong>b64_json</strong> response format is supported. Images are returned as base64-encoded data.
+                </div>
+
+                <div class="form-group">
+                    <label>Prompt</label>
+                    <textarea id="txt2imgPrompt" placeholder="Describe the image you want to generate...">a beautiful landscape with mountains and a lake at sunset, highly detailed, digital art</textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Size</label>
+                        <select id="txt2imgSize">
+                            <option value="1024x1024">1024x1024 (Square)</option>
+                            <option value="1024x1792">1024x1792 (Portrait)</option>
+                            <option value="1792x1024">1792x1024 (Landscape)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Number of Images (1-4)</label>
+                        <input type="number" id="txt2imgN" value="1" min="1" max="4">
+                        <div class="help-text">Generated concurrently (max 4)</div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="generateText2Image()" id="txt2imgBtn">
+                    Generate Images
+                </button>
+            </div>
+
+            <!-- Chat Completion Form -->
+            <div id="chatForm" class="form-section" style="display: none;">
+                <div class="alert alert-warning">
+                    Chat completions only support <strong>n=1</strong>. For multiple images, use Text to Image mode.
+                </div>
+
+                <div class="form-group">
+                    <label>Message</label>
+                    <textarea id="chatPrompt" placeholder="Describe the image you want to generate...">Generate an image of a futuristic city at night with neon lights</textarea>
+                    <div class="help-text">Your message will be sent to the chat API to generate an image</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Size</label>
+                        <select id="chatSize">
+                            <option value="1024x1024">1024x1024 (Square)</option>
+                            <option value="1024x1792">1024x1792 (Portrait)</option>
+                            <option value="1792x1024">1792x1024 (Landscape)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Model</label>
+                        <input type="text" id="chatModel" value="z-image-turbo" readonly>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="generateChatImage()" id="chatBtn">
+                    Generate Image
+                </button>
+            </div>
+
+            <!-- Gallery -->
+            <div class="header">
+                <h1>Gallery</h1>
+                <p>Recently generated images</p>
+            </div>
+
+            <div id="gallery" class="gallery">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎨</div>
+                    <p>No images generated yet</p>
+                    <p style="font-size: 12px; margin-top: 8px;">Generate your first image to see it here</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'txt2img';
+        let generatedImages = [];
+
+        // Switch between modes
+        function switchMode(mode) {
+            if (mode === 'img2img') return; // Disabled
+
+            currentMode = mode;
+
+            // Update active tab
+            document.querySelectorAll('.mode-tab').forEach(tab => {
+                if (tab.dataset.mode === mode) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // Update form visibility
+            document.getElementById('txt2imgForm').style.display = mode === 'txt2img' ? 'block' : 'none';
+            document.getElementById('chatForm').style.display = mode === 'chat' ? 'block' : 'none';
+
+            // Update header
+            if (mode === 'txt2img') {
+                document.getElementById('modeTitle').textContent = 'Text to Image';
+                document.getElementById('modeDesc').textContent = 'Generate images from text prompts using ComfyUI backend';
+            } else if (mode === 'chat') {
+                document.getElementById('modeTitle').textContent = 'Chat Completion';
+                document.getElementById('modeDesc').textContent = 'Generate images through chat interface (single image only)';
+            }
+        }
+
+        // Test API connection
+        async function testConnection() {
+            const btn = document.getElementById('testBtnText');
+            const statusDiv = document.getElementById('connectionStatus');
+            const endpoint = document.getElementById('apiEndpoint').value;
+
+            btn.innerHTML = '<span class="loading"></span>';
+            statusDiv.style.display = 'none';
+
+            try {
+                const response = await fetch(`${endpoint}/health`);
+                const data = await response.json();
+
+                statusDiv.style.display = 'block';
+
+                if (data.status === 'healthy') {
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = `
+                        <span class="status-dot"></span>
+                        <div>
+                            <div>Connected</div>
+                            <div style="font-size: 11px; opacity: 0.8;">txt2img: ${data.workflows?.txt2img ? '✓' : '✗'} | img2img: ${data.workflows?.img2img ? '✓' : '✗'}</div>
+                        </div>
+                    `;
+                } else if (data.status === 'initializing') {
+                    statusDiv.className = 'status initializing';
+                    statusDiv.innerHTML = `
+                        <span class="status-dot"></span>
+                        <div>Initializing...</div>
+                    `;
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = `
+                        <span class="status-dot"></span>
+                        <div>Degraded: ${data.comfyui?.error || 'Unknown error'}</div>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.style.display = 'block';
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `
+                    <span class="status-dot"></span>
+                    <div>Connection failed: ${error.message}</div>
+                `;
+            } finally {
+                btn.textContent = 'Test Connection';
+            }
+        }
+
+        // Generate text to image
+        async function generateText2Image() {
+            const endpoint = document.getElementById('apiEndpoint').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const prompt = document.getElementById('txt2imgPrompt').value;
+            const size = document.getElementById('txt2imgSize').value;
+            const n = parseInt(document.getElementById('txt2imgN').value);
+            const btn = document.getElementById('txt2imgBtn');
+
+            if (!prompt.trim()) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Generating...';
+
+            try {
+                const response = await fetch(`${endpoint}/v1/images/generations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        prompt,
+                        size,
+                        n,
+                        response_format: 'b64_json'
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Generation failed');
+                }
+
+                const data = await response.json();
+                
+                // Add to gallery
+                data.data.forEach(item => {
+                    addToGallery({
+                        dataUrl: `data:image/png;base64,${item.b64_json}`,
+                        prompt: prompt,
+                        size: size,
+                        timestamp: new Date().toLocaleString()
+                    });
+                });
+
+                alert(`Successfully generated ${data.data.length} image(s)!`);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Images';
+            }
+        }
+
+        // Generate chat image
+        async function generateChatImage() {
+            const endpoint = document.getElementById('apiEndpoint').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const prompt = document.getElementById('chatPrompt').value;
+            const size = document.getElementById('chatSize').value;
+            const model = document.getElementById('chatModel').value;
+            const btn = document.getElementById('chatBtn');
+
+            if (!prompt.trim()) {
+                alert('Please enter a message');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Generating...';
+
+            try {
+                const response = await fetch(`${endpoint}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        messages: [
+                            { role: 'user', content: prompt }
+                        ],
+                        size,
+                        n: 1,
+                        stream: false
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Generation failed');
+                }
+
+                const data = await response.json();
+                
+                // Extract image URL from response
+                const messageContent = data.choices[0].message.content;
+                let imageUrl;
+                
+                if (Array.isArray(messageContent)) {
+                    const imageItem = messageContent.find(item => item.type === 'image_url');
+                    imageUrl = imageItem?.image_url?.url;
+                } else if (typeof messageContent === 'string') {
+                    imageUrl = messageContent;
+                }
+
+                if (imageUrl) {
+                    addToGallery({
+                        dataUrl: imageUrl,
+                        prompt: prompt,
+                        size: size,
+                        timestamp: new Date().toLocaleString(),
+                        tokens: data.usage
+                    });
+                    alert('Image generated successfully!');
+                } else {
+                    throw new Error('No image in response');
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate Image';
+            }
+        }
+
+        // Add image to gallery
+        function addToGallery(image) {
+            generatedImages.unshift(image);
+            renderGallery();
+        }
+
+        // Render gallery
+        function renderGallery() {
+            const gallery = document.getElementById('gallery');
+
+            if (generatedImages.length === 0) {
+                gallery.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🎨</div>
+                        <p>No images generated yet</p>
+                        <p style="font-size: 12px; margin-top: 8px;">Generate your first image to see it here</p>
+                    </div>
+                `;
+                return;
+            }
+
+            gallery.innerHTML = generatedImages.map((img, index) => `
+                <div class="gallery-item">
+                    <img src="${img.dataUrl}" alt="Generated image">
+                    <div class="gallery-item-info">
+                        <div class="gallery-item-prompt" title="${img.prompt}">${img.prompt}</div>
+                        <div class="gallery-item-meta">
+                            ${img.size} • ${img.timestamp}
+                            ${img.tokens ? `<br>Tokens: ${img.tokens.total_tokens}` : ''}
+                        </div>
+                        <div class="gallery-item-actions">
+                            <button class="btn-small btn-download" onclick="downloadImage(${index})">
+                                💾 Save
+                            </button>
+                            <button class="btn-small btn-copy" onclick="copyPrompt(${index})">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Download image
+        function downloadImage(index) {
+            const img = generatedImages[index];
+            const link = document.createElement('a');
+            link.href = img.dataUrl;
+            link.download = `comfyui-${Date.now()}.png`;
+            link.click();
+        }
+
+        // Copy prompt
+        function copyPrompt(index) {
+            const img = generatedImages[index];
+            navigator.clipboard.writeText(img.prompt).then(() => {
+                alert('Prompt copied to clipboard!');
+            });
+        }
+
+        // Auto test connection on load
+        window.addEventListener('load', () => {
+            testConnection();
+        });
+    </script>
+</body>
+</html>
