@@ -37,13 +37,29 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 
 | Endpoint | Method | Description | Status |
 |----------|--------|-------------|--------|
-| `/v1/images/generations` | POST | Text to image | ✅ |
+| `/v1/images/generations` | POST | Text to image (OpenAI compatible) | ✅ |
 | `/v1/images/edits` | POST | Image to image | 🚧 Placeholder |
 | `/v1/images/img2img` | POST | Image to image (form) | 🚧 Placeholder |
-| `/v1/models` | GET | List models | ✅ |
-| `/v1/chat/completions` | POST | Chat with image gen | ✅ (n=1 only) |
+| `/v1/models` | GET | List models (OpenAI compatible) | ✅ |
+| `/v1/chat/completions` | POST | Chat with image gen (Extended) | ✅ |
 | `/health` | GET | Health check | ✅ |
 | `/reload` | POST | Reload workflows | ✅ |
+
+## API Compatibility
+
+### OpenAI Standard Endpoints
+- **`/v1/images/generations`**: Fully compatible with OpenAI Images API
+  - Standard parameters: `prompt`, `model`, `n`, `size`, `response_format`, `quality`, `style`
+  
+- **`/v1/models`**: Fully compatible with OpenAI Models API
+
+### Extended Endpoints
+- **`/v1/chat/completions`**: OpenAI Chat Completions API with image generation extensions
+  - **Standard parameters** (OpenAI compatible): `model`, `messages`, `temperature`, `max_tokens`, `stream`
+  - **Extension parameters** (optional, for image generation):
+    - `size` (string, optional): Image size, defaults to `1024x1024`
+    - `n` (integer, optional): Number of images, defaults to `1`, max `1` for chat completions
+  - **Note**: Standard OpenAI clients can use this endpoint by omitting extension parameters
 
 ## Basic Usage
 
@@ -56,6 +72,8 @@ curl -X POST http://localhost:8000/v1/images/generations \
 ```
 
 ### Chat Completions (Image Generation)
+
+**With extension parameters:**
 ```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Authorization: Bearer sk-comfyui-z-image-turbo" \
@@ -69,6 +87,20 @@ curl -X POST http://localhost:8000/v1/chat/completions \
     "n": 1
   }'
 ```
+
+**Standard OpenAI client (without extensions):**
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer sk-comfyui-z-image-turbo" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "z-image-turbo",
+    "messages": [
+      {"role": "user", "content": "a beautiful sunset over mountains"}
+    ]
+  }'
+```
+*Note: Omitting `size` and `n` uses defaults (1024x1024, n=1)*
 
 ### Health Check
 ```bash
@@ -93,7 +125,10 @@ Multiple images (n > 1) are generated concurrently (max 4 at a time) for better 
 
 - **Response Format**: Only `b64_json` is supported for image responses.
 - **Image-to-Image**: `/v1/images/edits` and `/v1/images/img2img` are placeholder endpoints (returns 501). Backend model not yet available.
-- **Chat Completions**: Only supports `n=1` for single image generation. For multiple images, use `/v1/images/generations`.
+- **Chat Completions**: 
+  - Only supports `n=1` for single image generation (extension parameter)
+  - For multiple images, use `/v1/images/generations` instead
+  - `size` and `n` are extension parameters, not part of OpenAI standard
 - **Streaming**: Streaming responses are not yet supported (returns 400 if stream=true).
 - **Token Accuracy**: Token counting is a simple estimation (characters / 4), not exact.
 

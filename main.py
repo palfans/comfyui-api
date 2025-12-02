@@ -145,13 +145,16 @@ class ChatMessage(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
+    # OpenAI standard parameters
     model: str
     messages: list[ChatMessage]
     temperature: float = 1.0
     max_tokens: Optional[int] = None
     stream: bool = False
-    size: str = DEFAULT_SIZE  # Image generation size
-    n: int = 1  # Number of images to generate
+    
+    # Extension parameters (not part of OpenAI standard)
+    size: Optional[str] = None  # Image generation size (extension, defaults to 1024x1024)
+    n: Optional[int] = None  # Number of images to generate (extension, defaults to 1)
 
 
 class ChatCompletionChoice(BaseModel):
@@ -775,7 +778,12 @@ async def reload_workflows(authorization: str = Header(None)):
 async def chat_completions(
     request: ChatCompletionRequest, authorization: str = Header(None)
 ):
-    """Chat completions endpoint - generates images based on conversation"""
+    """Chat completions endpoint - generates images based on conversation
+    
+    Supports standard OpenAI parameters plus optional extension parameters:
+    - size (optional): Image dimensions, defaults to 1024x1024
+    - n (optional): Number of images, defaults to 1, must be 1 for chat completions
+    """
     verify_api_key(authorization)
 
     # Check for streaming request
@@ -785,8 +793,12 @@ async def chat_completions(
             detail="Streaming is not yet supported. Please set stream=false.",
         )
     
+    # Apply defaults for extension parameters
+    size = request.size or DEFAULT_SIZE
+    n = request.n or DEFAULT_N
+    
     # Chat completions only supports single image generation
-    if request.n != 1:
+    if n != 1:
         raise HTTPException(
             status_code=400,
             detail="Chat completions only supports n=1. For multiple images, use /v1/images/generations.",
@@ -817,8 +829,8 @@ async def chat_completions(
     prompt = " ".join(prompt_parts).strip()
 
     # Parse and validate parameters
-    width, height = parse_size(request.size)
-    n = clamp_n(request.n)
+    width, height = parse_size(size)
+    n = clamp_n(n)
 
     print(f"[chat/completions] prompt='{prompt[:50]}...', size={width}x{height}, n={n}")
 
