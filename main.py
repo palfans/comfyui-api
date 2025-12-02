@@ -13,7 +13,7 @@ import aiohttp
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
@@ -45,11 +45,24 @@ DEFAULT_RESPONSE_FORMAT = "b64_json"
 DEFAULT_QUALITY = "standard"
 DEFAULT_STYLE = "natural"
 
-# Supported image sizes
+# Supported image sizes (Z-Image-Turbo supports 512-1536 range)
 SUPPORTED_SIZES = [
+    "512x512",
+    "512x768",
+    "768x512",
+    "576x1024",
+    "1024x576",
+    "768x768",
+    "768x1024",
+    "1024x768",
+    "768x1344",
+    "1344x768",
     "1024x1024",
-    "1024x1792",
-    "1792x1024",
+    "1024x1536",
+    "1536x1024",
+    "1152x1536",
+    "1536x1152",
+    "1536x1536",
 ]
 
 # Timeout settings
@@ -60,27 +73,58 @@ GENERATION_TIMEOUT = 300  # seconds for image generation
 MAX_CONCURRENT_GENERATIONS = 4
 
 
-def parse_size(size_str: str) -> tuple[int, int]:
-    """Parse size string (e.g., '1024x1024') with fallback to default."""
+def parse_size(size_str: str, strict: bool = False) -> tuple[int, int]:
+    """
+    Parse size string (e.g., '1024x1024').
+    
+    Args:
+        size_str: Size string in format 'WIDTHxHEIGHT'
+        strict: If True, raise ValueError for unsupported sizes. If False, fallback to default.
+    
+    Returns:
+        Tuple of (width, height)
+    
+    Raises:
+        ValueError: If strict=True and size is not supported
+    """
     try:
         parts = size_str.lower().split("x")
-        if len(parts) == 2:
-            width, height = int(parts[0]), int(parts[1])
-            if width > 0 and height > 0:
-                # Validate against supported sizes
-                size_normalized = f"{width}x{height}"
-                if size_normalized in SUPPORTED_SIZES:
-                    return width, height
-                else:
-                    print(
-                        f"[WARN] Size '{size_normalized}' not in supported sizes, using default {DEFAULT_SIZE}"
-                    )
-    except (ValueError, AttributeError):
-        pass
-
-    print(f"[WARN] Invalid size '{size_str}', using default {DEFAULT_SIZE}")
-    default_width, default_height = DEFAULT_SIZE.split("x")
-    return int(default_width), int(default_height)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid format")
+        
+        width, height = int(parts[0]), int(parts[1])
+        if width <= 0 or height <= 0:
+            raise ValueError(f"Width and height must be positive")
+        
+        size_normalized = f"{width}x{height}"
+        if size_normalized in SUPPORTED_SIZES:
+            return width, height
+        
+        # Size not in supported list
+        if strict:
+            raise ValueError(
+                f"Size '{size_normalized}' is not supported. "
+                f"Supported sizes: {', '.join(SUPPORTED_SIZES)}"
+            )
+        else:
+            print(
+                f"[WARN] Size '{size_normalized}' not in supported sizes, using default {DEFAULT_SIZE}"
+            )
+            default_width, default_height = DEFAULT_SIZE.split("x")
+            return int(default_width), int(default_height)
+            
+    except ValueError as e:
+        if strict:
+            # Check if error message already contains our custom message
+            if "not supported" in str(e):
+                raise
+            raise ValueError(
+                f"Invalid size format '{size_str}'. Expected format: 'WIDTHxHEIGHT' (e.g., '1024x1024')"
+            )
+        
+        print(f"[WARN] Invalid size '{size_str}', using default {DEFAULT_SIZE}")
+        default_width, default_height = DEFAULT_SIZE.split("x")
+        return int(default_width), int(default_height)
 
 
 def clamp_n(n: int) -> int:
@@ -180,6 +224,26 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: list[ChatCompletionChoice]
     usage: ChatCompletionUsage
+
+
+class ChatCompletionChunkDelta(BaseModel):
+    role: Optional[str] = None
+    content: Optional[str | list[dict]] = None
+
+
+class ChatCompletionChunkChoice(BaseModel):
+    index: int
+    delta: ChatCompletionChunkDelta
+    finish_reason: Optional[str] = None
+
+
+class ChatCompletionChunk(BaseModel):
+    id: str
+    object: str = "chat.completion.chunk"
+    created: int
+    model: str
+    choices: list[ChatCompletionChunkChoice]
+    usage: Optional[ChatCompletionUsage] = None
 
 
 # ==================== Workflow Manager ====================
@@ -627,7 +691,11 @@ async def generate_images(
         )
 
     # Parse and validate parameters
-    width, height = parse_size(request.size)
+    try:
+        width, height = parse_size(request.size, strict=True)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
     n = clamp_n(request.n)
 
     print(
@@ -790,7 +858,7 @@ async def reload_workflows(authorization: str = Header(None)):
     }
 
 
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+@app.post("/v1/chat/completions")
 async def chat_completions(
     request: ChatCompletionRequest, authorization: str = Header(None)
 ):
@@ -799,15 +867,9 @@ async def chat_completions(
     Supports standard OpenAI parameters plus optional extension parameters:
     - size (optional): Image dimensions, defaults to 1024x1024
     - n (optional): Number of images, defaults to 1, must be 1 for chat completions
+    - stream (optional): Enable streaming response
     """
     verify_api_key(authorization)
-
-    # Check for streaming request
-    if request.stream:
-        raise HTTPException(
-            status_code=400,
-            detail="Streaming is not yet supported. Please set stream=false.",
-        )
     
     # Apply defaults for extension parameters
     size = request.size or DEFAULT_SIZE
@@ -845,53 +907,167 @@ async def chat_completions(
     prompt = " ".join(prompt_parts).strip()
 
     # Parse and validate parameters
-    width, height = parse_size(size)
+    try:
+        width, height = parse_size(size, strict=True)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
     n = clamp_n(n)
 
-    print(f"[chat/completions] prompt='{prompt[:50]}...', size={width}x{height}, n={n}")
+    print(f"[chat/completions] prompt='{prompt[:50]}...', size={width}x{height}, n={n}, stream={request.stream}")
 
     # Generate image using txt2img
-    generated_images = []
+    async def generate_image():
+        generated_images = []
 
-    for i in range(n):
-        seed = int(time.time() * 1000 + i) % (2**32)
-        workflow = workflow_manager.prepare_txt2img(
-            prompt=prompt, width=width, height=height, seed=seed
-        )
+        for i in range(n):
+            seed = int(time.time() * 1000 + i) % (2**32)
+            workflow = workflow_manager.prepare_txt2img(
+                prompt=prompt, width=width, height=height, seed=seed
+            )
 
-        prompt_id = await comfyui_client.queue_prompt(workflow)
-        print(
-            f"[chat/completions] Task {i + 1}/{n}: prompt_id={prompt_id}, seed={seed}"
-        )
+            prompt_id = await comfyui_client.queue_prompt(workflow)
+            print(
+                f"[chat/completions] Task {i + 1}/{n}: prompt_id={prompt_id}, seed={seed}"
+            )
 
-        result = await comfyui_client.wait_for_completion(prompt_id)
+            result = await comfyui_client.wait_for_completion(prompt_id)
 
-        outputs = result.get("outputs", {})
-        for node_id, node_output in outputs.items():
-            if "images" in node_output:
-                for img_info in node_output["images"]:
-                    image_data = await comfyui_client.get_image(
-                        filename=img_info["filename"],
-                        subfolder=img_info.get("subfolder", ""),
-                        folder_type=img_info.get("type", "output"),
-                    )
-                    b64_data = base64.b64encode(image_data).decode("utf-8")
-                    generated_images.append(b64_data)
+            outputs = result.get("outputs", {})
+            for node_id, node_output in outputs.items():
+                if "images" in node_output:
+                    for img_info in node_output["images"]:
+                        image_data = await comfyui_client.get_image(
+                            filename=img_info["filename"],
+                            subfolder=img_info.get("subfolder", ""),
+                            folder_type=img_info.get("type", "output"),
+                        )
+                        b64_data = base64.b64encode(image_data).decode("utf-8")
+                        generated_images.append(b64_data)
+                        break
+                if generated_images:
                     break
-            if generated_images:
-                break
 
-    if not generated_images:
-        raise HTTPException(status_code=500, detail="Failed to generate image")
+        if not generated_images:
+            raise HTTPException(status_code=500, detail="Failed to generate image")
 
-    # Build OpenAI-compatible response
+        return generated_images[0]
+
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    created = int(time.time())
+    
+    # Handle streaming response
+    if request.stream:
+        async def stream_generator():
+            try:
+                # Send initial chunk with role
+                chunk = ChatCompletionChunk(
+                    id=completion_id,
+                    created=created,
+                    model=request.model,
+                    choices=[
+                        ChatCompletionChunkChoice(
+                            index=0,
+                            delta=ChatCompletionChunkDelta(role="assistant"),
+                            finish_reason=None,
+                        )
+                    ],
+                )
+                yield f"data: {chunk.model_dump_json()}\n\n"
+
+                # Send status message
+                chunk = ChatCompletionChunk(
+                    id=completion_id,
+                    created=created,
+                    model=request.model,
+                    choices=[
+                        ChatCompletionChunkChoice(
+                            index=0,
+                            delta=ChatCompletionChunkDelta(content="Generating image..."),
+                            finish_reason=None,
+                        )
+                    ],
+                )
+                yield f"data: {chunk.model_dump_json()}\n\n"
+
+                # Generate image
+                b64_image = await generate_image()
+
+                # Send image as markdown with base64 data URL
+                # This format works with most chat clients
+                image_markdown = f"\n\n![Generated Image](data:image/png;base64,{b64_image})"
+                
+                chunk = ChatCompletionChunk(
+                    id=completion_id,
+                    created=created,
+                    model=request.model,
+                    choices=[
+                        ChatCompletionChunkChoice(
+                            index=0,
+                            delta=ChatCompletionChunkDelta(content=image_markdown),
+                            finish_reason=None,
+                        )
+                    ],
+                )
+                yield f"data: {chunk.model_dump_json()}\n\n"
+
+                # Send final chunk with finish_reason
+                prompt_tokens = estimate_tokens(prompt)
+                completion_tokens = 100  # Estimate per image
+
+                chunk = ChatCompletionChunk(
+                    id=completion_id,
+                    created=created,
+                    model=request.model,
+                    choices=[
+                        ChatCompletionChunkChoice(
+                            index=0,
+                            delta=ChatCompletionChunkDelta(),
+                            finish_reason="stop",
+                        )
+                    ],
+                    usage=ChatCompletionUsage(
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=prompt_tokens + completion_tokens,
+                    ),
+                )
+                yield f"data: {chunk.model_dump_json()}\n\n"
+
+                # Send [DONE] marker
+                yield "data: [DONE]\n\n"
+
+            except Exception as e:
+                print(f"[ERROR] Stream error: {e}")
+                import traceback
+                traceback.print_exc()
+                error_chunk = {
+                    "error": {
+                        "message": str(e),
+                        "type": "internal_error",
+                        "code": "internal_error",
+                    }
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    # Handle non-streaming response
+    b64_image = await generate_image()
 
     # Construct message content with image and text
     message_content = [
         {
             "type": "image_url",
-            "image_url": {"url": f"data:image/png;base64,{generated_images[0]}"},
+            "image_url": {"url": f"data:image/png;base64,{b64_image}"},
         },
         {"type": "text", "text": f"Generated image for: {prompt}"},
     ]
@@ -904,7 +1080,7 @@ async def chat_completions(
 
     # Calculate token usage (simple estimation)
     prompt_tokens = estimate_tokens(prompt)
-    completion_tokens = len(generated_images) * 100  # Estimate per image
+    completion_tokens = 100  # Estimate per image
 
     usage = ChatCompletionUsage(
         prompt_tokens=prompt_tokens,
@@ -914,7 +1090,7 @@ async def chat_completions(
 
     return ChatCompletionResponse(
         id=completion_id,
-        created=int(time.time()),
+        created=created,
         model=request.model,
         choices=[choice],
         usage=usage,
