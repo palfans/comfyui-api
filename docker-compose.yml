@@ -1,0 +1,30 @@
+services:
+  comfyui-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: palfans/comfyui-api:latest
+    container_name: comfyui-api
+    ports:
+      - "8000:8000"
+    environment:
+      # ComfyUI backend URL (adjust if ComfyUI is on different host)
+      - COMFYUI_URL=http://host.docker.internal:8188
+      # API server config
+      - HOST=0.0.0.0
+      - PORT=8000
+      # Python config
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - comfyui-network
+
+networks:
+  comfyui-network:
+    driver: bridge

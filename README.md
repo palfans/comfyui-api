@@ -9,7 +9,23 @@ OpenAI compatible API for ComfyUI with txt2img and img2img support.
 - [uv](https://github.com/astral-sh/uv) installed
 - ComfyUI running on `http://127.0.0.1:8188`
 
-### Installation
+### Option 1: Docker (Recommended)
+
+```bash
+# Pull and run
+docker run -d \
+  --name comfyui-api \
+  -p 8000:8000 \
+  -e COMFYUI_URL=http://host.docker.internal:8188 \
+  palfans/comfyui-api:latest
+
+# Or use docker-compose
+docker-compose up -d
+```
+
+📖 See [DOCKER.md](DOCKER.md) for detailed Docker deployment guide.
+
+### Option 2: Local Installation
 
 ```bash
 # Clone repository
