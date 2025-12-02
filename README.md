@@ -89,11 +89,19 @@ curl http://localhost:8000/health
 - `1024x1792` (portrait)
 - `1792x1024` (landscape)
 
+## Features
+
+### Token Counting ✅
+Chat completions return estimated token usage based on prompt length.
+
+### Concurrent Generation ✅
+Multiple images (n > 1) are generated concurrently (max 4 at a time) for better performance.
+
 ## Current Limitations
 
-- **Response Format**: Only `b64_json` is supported. URL format is not yet implemented.
-- **Token Counting**: Usage statistics in chat completions return 0 (not yet implemented).
-- **Streaming**: Streaming responses are not yet supported.
+- **Response Format**: Only `b64_json` is supported for image responses.
+- **Streaming**: Streaming responses are not yet supported (returns 400 if stream=true).
+- **Token Accuracy**: Token counting is a simple estimation (characters / 4), not exact.
 
 ## Configuration
 

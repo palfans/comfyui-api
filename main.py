@@ -52,6 +52,9 @@ SUPPORTED_SIZES = [
 REQUEST_TIMEOUT = 30  # seconds for HTTP requests
 GENERATION_TIMEOUT = 300  # seconds for image generation
 
+# Concurrent generation limits
+MAX_CONCURRENT_GENERATIONS = 4
+
 
 def parse_size(size_str: str) -> tuple[int, int]:
     """Parse size string (e.g., '1024x1024') with fallback to default."""
@@ -98,6 +101,13 @@ def clamp_strength(strength: float) -> float:
     return strength
 
 
+def estimate_tokens(text: str) -> int:
+    """Estimate token count based on character length (simple approximation)."""
+    import math
+
+    return math.ceil(len(text) / 4)
+
+
 # ==================== Request Models ====================
 class ImageGenerationRequest(BaseModel):
     model: str = MODEL_NAME
@@ -120,8 +130,7 @@ class Img2ImgRequest(BaseModel):
 
 
 class ImageData(BaseModel):
-    b64_json: Optional[str] = None
-    url: Optional[str] = None
+    b64_json: str
     revised_prompt: Optional[str] = None
 
 
@@ -399,7 +408,7 @@ async def lifespan(app: FastAPI):
     # Startup banner
     print("")
     print("========================================")
-    print("  ComfyUI API Bridge v2.0 (Phase 2)")
+    print("  ComfyUI API Bridge v2.0 (Phase 3)")
     print("========================================")
     print(f"  ComfyUI:  {COMFYUI_URL}")
     print(f"  API Key:  {API_KEY[:15]}...")
@@ -413,6 +422,7 @@ async def lifespan(app: FastAPI):
         f"  Defaults: size={DEFAULT_SIZE}, n={DEFAULT_N}, strength={DEFAULT_STRENGTH}"
     )
     print(f"  Sizes: {', '.join(SUPPORTED_SIZES)}")
+    print(f"  Max Concurrent: {MAX_CONCURRENT_GENERATIONS}")
     print("========================================")
 
     yield
@@ -483,25 +493,28 @@ async def generate_images(
     if request.response_format != "b64_json":
         raise HTTPException(
             status_code=400,
-            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}. URL format is not yet implemented.",
+            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}",
         )
 
     # Parse and validate parameters
     width, height = parse_size(request.size)
     n = clamp_n(request.n)
 
-    print(f"[txt2img] prompt='{request.prompt[:50]}...', size={width}x{height}, n={n}")
+    print(
+        f"[txt2img] prompt='{request.prompt[:50]}...', size={width}x{height}, n={n}"
+    )
 
-    generated_images = []
+    start_time = time.time()
 
-    for i in range(n):
-        seed = int(time.time() * 1000 + i) % (2**32)
+    # Define async generation function for concurrent execution
+    async def generate_single_image(index: int):
+        seed = int(time.time() * 1000 + index) % (2**32)
         workflow = workflow_manager.prepare_txt2img(
             prompt=request.prompt, width=width, height=height, seed=seed
         )
 
         prompt_id = await comfyui_client.queue_prompt(workflow)
-        print(f"[txt2img] Task {i + 1}/{n}: prompt_id={prompt_id}, seed={seed}")
+        print(f"[txt2img] Task {index + 1}/{n}: prompt_id={prompt_id}, seed={seed}")
 
         result = await comfyui_client.wait_for_completion(prompt_id)
 
@@ -515,12 +528,30 @@ async def generate_images(
                         folder_type=img_info.get("type", "output"),
                     )
                     b64_data = base64.b64encode(image_data).decode("utf-8")
-                    generated_images.append(
-                        ImageData(b64_json=b64_data, revised_prompt=request.prompt)
+                    return ImageData(
+                        b64_json=b64_data, revised_prompt=request.prompt
                     )
-                    break
-            if generated_images:
-                break
+        return None
+
+    # Execute generations concurrently with limit
+    if n <= MAX_CONCURRENT_GENERATIONS:
+        # Generate all concurrently
+        tasks = [generate_single_image(i) for i in range(n)]
+        generated_images = await asyncio.gather(*tasks)
+    else:
+        # Generate in batches to respect concurrency limit
+        generated_images = []
+        for i in range(0, n, MAX_CONCURRENT_GENERATIONS):
+            batch_size = min(MAX_CONCURRENT_GENERATIONS, n - i)
+            tasks = [generate_single_image(i + j) for j in range(batch_size)]
+            batch_results = await asyncio.gather(*tasks)
+            generated_images.extend(batch_results)
+
+    # Filter out None values
+    generated_images = [img for img in generated_images if img is not None]
+
+    elapsed = time.time() - start_time
+    print(f"[txt2img] Completed {len(generated_images)}/{n} images in {elapsed:.2f}s")
 
     if not generated_images:
         raise HTTPException(status_code=500, detail="Failed to generate image")
@@ -540,7 +571,7 @@ async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)
     if request.response_format != "b64_json":
         raise HTTPException(
             status_code=400,
-            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}. URL format is not yet implemented.",
+            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}",
         )
 
     # Validate image data
@@ -553,16 +584,18 @@ async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)
     n = clamp_n(request.n)
     strength = clamp_strength(request.strength)
 
-    print(f"[img2img] prompt='{request.prompt[:50]}...', n={n}, strength={strength}")
+    print(
+        f"[img2img] prompt='{request.prompt[:50]}...', n={n}, strength={strength}"
+    )
 
-    generated_images = []
+    start_time = time.time()
 
-    for i in range(n):
-        filename = f"input_{int(time.time())}_{i}.png"
+    async def generate_single_edit(index: int):
+        filename = f"input_{int(time.time())}_{index}.png"
         uploaded_name = await comfyui_client.upload_image(image_data, filename)
-        print(f"[img2img] Task {i + 1}/{n}: uploaded={uploaded_name}")
+        print(f"[img2img] Task {index + 1}/{n}: uploaded={uploaded_name}")
 
-        seed = int(time.time() * 1000 + i) % (2**32)
+        seed = int(time.time() * 1000 + index) % (2**32)
         workflow = workflow_manager.prepare_img2img(
             prompt=request.prompt,
             image_name=uploaded_name,
@@ -571,7 +604,7 @@ async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)
         )
 
         prompt_id = await comfyui_client.queue_prompt(workflow)
-        print(f"[img2img] Task {i + 1}/{n}: prompt_id={prompt_id}, seed={seed}")
+        print(f"[img2img] Task {index + 1}/{n}: prompt_id={prompt_id}, seed={seed}")
 
         result = await comfyui_client.wait_for_completion(prompt_id)
 
@@ -585,12 +618,27 @@ async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)
                         folder_type=img_info.get("type", "output"),
                     )
                     b64_data = base64.b64encode(result_image).decode("utf-8")
-                    generated_images.append(
-                        ImageData(b64_json=b64_data, revised_prompt=request.prompt)
+                    return ImageData(
+                        b64_json=b64_data, revised_prompt=request.prompt
                     )
-                    break
-            if len(generated_images) > i:
-                break
+        return None
+
+    # Execute edits concurrently
+    if n <= MAX_CONCURRENT_GENERATIONS:
+        tasks = [generate_single_edit(i) for i in range(n)]
+        generated_images = await asyncio.gather(*tasks)
+    else:
+        generated_images = []
+        for i in range(0, n, MAX_CONCURRENT_GENERATIONS):
+            batch_size = min(MAX_CONCURRENT_GENERATIONS, n - i)
+            tasks = [generate_single_edit(i + j) for j in range(batch_size)]
+            batch_results = await asyncio.gather(*tasks)
+            generated_images.extend(batch_results)
+
+    generated_images = [img for img in generated_images if img is not None]
+
+    elapsed = time.time() - start_time
+    print(f"[img2img] Completed {len(generated_images)}/{n} images in {elapsed:.2f}s")
 
     if not generated_images:
         raise HTTPException(status_code=500, detail="Failed to generate image")
@@ -718,6 +766,13 @@ async def chat_completions(
     """Chat completions endpoint - generates images based on conversation"""
     verify_api_key(authorization)
 
+    # Check for streaming request
+    if request.stream:
+        raise HTTPException(
+            status_code=400,
+            detail="Streaming is not yet supported. Please set stream=false.",
+        )
+
     if workflow_manager.txt2img_template is None:
         raise HTTPException(status_code=500, detail="txt2img workflow not configured")
 
@@ -800,10 +855,14 @@ async def chat_completions(
         finish_reason="stop",
     )
 
+    # Calculate token usage (simple estimation)
+    prompt_tokens = estimate_tokens(prompt)
+    completion_tokens = len(generated_images) * 100  # Estimate per image
+
     usage = ChatCompletionUsage(
-        prompt_tokens=0,  # TODO: Implement token counting
-        completion_tokens=0,
-        total_tokens=0,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
     )
 
     return ChatCompletionResponse(
