@@ -13,14 +13,18 @@ import aiohttp
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 
 # ==================== CONFIG ====================
 # ComfyUI connection
-COMFYUI_HOST = os.getenv("COMFYUI_HOST", "127.0.0.1")
-COMFYUI_PORT = os.getenv("COMFYUI_PORT", "8188")
-COMFYUI_URL = f"http://{COMFYUI_HOST}:{COMFYUI_PORT}"
+# Support both COMFYUI_URL (full URL) or COMFYUI_HOST+COMFYUI_PORT
+COMFYUI_URL = os.getenv("COMFYUI_URL")
+if not COMFYUI_URL:
+    COMFYUI_HOST = os.getenv("COMFYUI_HOST", "127.0.0.1")
+    COMFYUI_PORT = os.getenv("COMFYUI_PORT", "8188")
+    COMFYUI_URL = f"http://{COMFYUI_HOST}:{COMFYUI_PORT}"
 
 # API authentication
 API_KEY = os.getenv("API_KEY", "sk-comfyui-z-image-turbo")
@@ -714,6 +718,18 @@ async def img2img_form(
         status_code=501,
         detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available."
     )
+
+
+@app.get("/")
+async def root():
+    """Serve the web UI"""
+    return FileResponse("index.html")
+
+
+@app.get("/index.html")
+async def index():
+    """Serve the web UI (alternative route)"""
+    return FileResponse("index.html")
 
 
 @app.get("/health")
