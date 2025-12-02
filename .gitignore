@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# uv
+.uv/
+uv.lock
+
+# Project prompt/config artifacts
+.ai/
+.gemini/
+.github/chatmodes
+AGENTS.md
+
+# Temporary files
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
