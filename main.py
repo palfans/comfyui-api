@@ -202,6 +202,15 @@ class WorkflowManager:
             print(f"[ERROR] img2img JSON error: {e}")
 
     def find_prompt_node(self, workflow: dict) -> Optional[str]:
+        # Handle ComfyUI UI workflow format (with nodes array)
+        if "nodes" in workflow:
+            nodes = workflow["nodes"]
+            for node in nodes:
+                if node.get("type") == "CLIPTextEncode":
+                    return str(node["id"])
+            return None
+        
+        # Handle API workflow format (dict of nodes)
         for node_id, node in workflow.items():
             if node.get("class_type") == "CLIPTextEncode":
                 meta = node.get("_meta", {})
@@ -223,6 +232,16 @@ class WorkflowManager:
         return None
 
     def find_latent_node(self, workflow: dict) -> Optional[str]:
+        # Handle ComfyUI UI workflow format
+        if "nodes" in workflow:
+            nodes = workflow["nodes"]
+            for node in nodes:
+                node_type = node.get("type")
+                if node_type in ["EmptyLatentImage", "EmptySD3LatentImage"]:
+                    return str(node["id"])
+            return None
+        
+        # Handle API workflow format
         for node_id, node in workflow.items():
             if node.get("class_type") == "EmptyLatentImage":
                 return node_id
@@ -241,7 +260,33 @@ class WorkflowManager:
             raise ValueError("txt2img workflow not loaded")
 
         workflow = json.loads(json.dumps(self.txt2img_template))
+        
+        if seed is None:
+            seed = int(time.time() * 1000) % (2**32)
 
+        # Handle ComfyUI UI workflow format (with nodes array)
+        if "nodes" in workflow:
+            nodes = workflow["nodes"]
+            for node in nodes:
+                node_type = node.get("type")
+                
+                # Update prompt
+                if node_type == "CLIPTextEncode":
+                    if "widgets_values" in node:
+                        node["widgets_values"] = [prompt]
+                
+                # Update size
+                elif node_type in ["EmptyLatentImage", "EmptySD3LatentImage"]:
+                    if "widgets_values" in node:
+                        node["widgets_values"] = [width, height, 1]
+                
+                # Update seed
+                elif "KSampler" in node_type:
+                    if "widgets_values" in node and len(node["widgets_values"]) > 0:
+                        node["widgets_values"][0] = seed
+            return workflow
+        
+        # Handle API workflow format (dict of nodes)
         prompt_node = self.find_prompt_node(workflow)
         if prompt_node and prompt_node in workflow:
             workflow[prompt_node]["inputs"]["text"] = prompt
@@ -251,8 +296,6 @@ class WorkflowManager:
             workflow[latent_node]["inputs"]["width"] = width
             workflow[latent_node]["inputs"]["height"] = height
 
-        if seed is None:
-            seed = int(time.time() * 1000) % (2**32)
         sampler_node = self.find_sampler_node(workflow)
         if sampler_node and sampler_node in workflow:
             workflow[sampler_node]["inputs"]["seed"] = seed
@@ -319,7 +362,12 @@ class ComfyUIClient:
                 await session.close()
 
     async def queue_prompt(self, workflow: dict) -> str:
-        payload = {"prompt": workflow, "client_id": self.client_id}
+        # Convert ComfyUI UI workflow format to API format if needed
+        api_workflow = workflow
+        if "nodes" in workflow:
+            api_workflow = self._convert_ui_to_api_format(workflow)
+        
+        payload = {"prompt": api_workflow, "client_id": self.client_id}
 
         session = self.session or aiohttp.ClientSession()
         try:
@@ -339,6 +387,81 @@ class ComfyUIClient:
         finally:
             if self._owns_session and session:
                 await session.close()
+    
+    def _convert_ui_to_api_format(self, ui_workflow: dict) -> dict:
+        """Convert ComfyUI UI workflow format to API format."""
+        api_workflow = {}
+        nodes = ui_workflow.get("nodes", [])
+        links_array = ui_workflow.get("links", [])
+        
+        # Skip non-executable node types
+        skip_node_types = ["Note", "MarkdownNote", "PrimitiveNode"]
+        
+        # Build links lookup: link_id -> [source_node_id, source_output_index]
+        links_lookup = {}
+        for link in links_array:
+            if len(link) >= 5:
+                link_id, source_node, source_slot, target_node, target_slot = link[:5]
+                links_lookup[link_id] = [source_node, source_slot]
+        
+        # Convert each node
+        for node in nodes:
+            node_id = str(node["id"])
+            node_type = node.get("type")
+            
+            # Skip non-executable nodes
+            if node_type in skip_node_types:
+                continue
+            
+            # Initialize API node
+            api_workflow[node_id] = {
+                "class_type": node_type,
+                "inputs": {}
+            }
+            
+            # Process inputs
+            for inp in node.get("inputs", []):
+                input_name = inp.get("name")
+                link_id = inp.get("link")
+                
+                if link_id is not None and link_id in links_lookup:
+                    # Input from another node
+                    source_node_id, source_output_index = links_lookup[link_id]
+                    api_workflow[node_id]["inputs"][input_name] = [str(source_node_id), source_output_index]
+            
+            # Add widget values as inputs based on node type
+            widgets_values = node.get("widgets_values", [])
+            if node_type == "CLIPTextEncode" and len(widgets_values) > 0:
+                api_workflow[node_id]["inputs"]["text"] = widgets_values[0]
+            elif node_type in ["EmptyLatentImage", "EmptySD3LatentImage"] and len(widgets_values) >= 3:
+                api_workflow[node_id]["inputs"]["width"] = widgets_values[0]
+                api_workflow[node_id]["inputs"]["height"] = widgets_values[1]
+                api_workflow[node_id]["inputs"]["batch_size"] = widgets_values[2]
+            elif "KSampler" in node_type and len(widgets_values) >= 7:
+                # KSampler widgets: [seed, control_after_generate, steps, cfg, sampler_name, scheduler, denoise]
+                api_workflow[node_id]["inputs"]["seed"] = widgets_values[0]
+                api_workflow[node_id]["inputs"]["steps"] = widgets_values[2]
+                api_workflow[node_id]["inputs"]["cfg"] = widgets_values[3]
+                api_workflow[node_id]["inputs"]["sampler_name"] = widgets_values[4]
+                api_workflow[node_id]["inputs"]["scheduler"] = widgets_values[5]
+                api_workflow[node_id]["inputs"]["denoise"] = widgets_values[6]
+            elif node_type == "VAELoader" and len(widgets_values) > 0:
+                api_workflow[node_id]["inputs"]["vae_name"] = widgets_values[0]
+            elif node_type == "UNETLoader" and len(widgets_values) > 0:
+                api_workflow[node_id]["inputs"]["unet_name"] = widgets_values[0]
+                if len(widgets_values) >= 2:
+                    api_workflow[node_id]["inputs"]["weight_dtype"] = widgets_values[1]
+            elif node_type == "CLIPLoaderGGUF" and len(widgets_values) >= 2:
+                # CLIPLoaderGGUF widgets: [clip_name, type]
+                api_workflow[node_id]["inputs"]["clip_name"] = widgets_values[0]
+                api_workflow[node_id]["inputs"]["type"] = widgets_values[1]
+            elif node_type == "ModelSamplingAuraFlow" and len(widgets_values) >= 1:
+                # ModelSamplingAuraFlow widgets: [shift]
+                api_workflow[node_id]["inputs"]["shift"] = widgets_values[0]
+            elif node_type == "SaveImage" and len(widgets_values) > 0:
+                api_workflow[node_id]["inputs"]["filename_prefix"] = widgets_values[0]
+        
+        return api_workflow
 
     async def wait_for_completion(
         self, prompt_id: str, timeout: int = GENERATION_TIMEOUT
