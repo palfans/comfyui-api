@@ -41,7 +41,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 | `/v1/images/edits` | POST | Image to image | ✅ |
 | `/v1/images/img2img` | POST | Image to image (form) | ✅ |
 | `/v1/models` | GET | List models | ✅ |
-| `/v1/chat/completions` | POST | Chat with image gen | 🚧 Phase 2 |
+| `/v1/chat/completions` | POST | Chat with image gen | ✅ |
 | `/health` | GET | Health check | ✅ |
 | `/reload` | POST | Reload workflows | ✅ |
 
@@ -63,10 +63,38 @@ curl -X POST http://localhost:8000/v1/images/edits \
   -d '{"prompt": "anime style", "image": "<base64>", "strength": 0.6}'
 ```
 
+### Chat Completions (Image Generation)
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer sk-comfyui-z-image-turbo" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "z-image-turbo",
+    "messages": [
+      {"role": "user", "content": "a beautiful sunset over mountains"}
+    ],
+    "size": "1024x1024",
+    "n": 1
+  }'
+```
+
 ### Health Check
 ```bash
 curl http://localhost:8000/health
 ```
+
+## Supported Sizes
+
+- `1024x1024` (square)
+- `1024x1792` (portrait)
+- `1792x1024` (landscape)
+
+## Current Limitations
+
+- **Response Format**: Only `b64_json` is supported. URL format is not yet implemented.
+- **Token Counting**: Usage statistics in chat completions return 0 (not yet implemented).
+- **Streaming**: Streaming responses are not yet supported.
+
 ## Configuration
 
 Set environment variables to customize behavior:

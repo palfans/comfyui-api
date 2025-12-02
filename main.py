@@ -41,6 +41,13 @@ DEFAULT_RESPONSE_FORMAT = "b64_json"
 DEFAULT_QUALITY = "standard"
 DEFAULT_STYLE = "natural"
 
+# Supported image sizes
+SUPPORTED_SIZES = [
+    "1024x1024",
+    "1024x1792",
+    "1792x1024",
+]
+
 # Timeout settings
 REQUEST_TIMEOUT = 30  # seconds for HTTP requests
 GENERATION_TIMEOUT = 300  # seconds for image generation
@@ -53,12 +60,20 @@ def parse_size(size_str: str) -> tuple[int, int]:
         if len(parts) == 2:
             width, height = int(parts[0]), int(parts[1])
             if width > 0 and height > 0:
-                return width, height
+                # Validate against supported sizes
+                size_normalized = f"{width}x{height}"
+                if size_normalized in SUPPORTED_SIZES:
+                    return width, height
+                else:
+                    print(
+                        f"[WARN] Size '{size_normalized}' not in supported sizes, using default {DEFAULT_SIZE}"
+                    )
     except (ValueError, AttributeError):
         pass
 
     print(f"[WARN] Invalid size '{size_str}', using default {DEFAULT_SIZE}")
-    return parse_size(DEFAULT_SIZE)
+    default_width, default_height = DEFAULT_SIZE.split("x")
+    return int(default_width), int(default_height)
 
 
 def clamp_n(n: int) -> int:
@@ -117,7 +132,7 @@ class ImageGenerationResponse(BaseModel):
 
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    content: str | list[dict]  # Support both string and content list
 
 
 class ChatCompletionRequest(BaseModel):
@@ -126,6 +141,20 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = 1.0
     max_tokens: Optional[int] = None
     stream: bool = False
+    size: str = DEFAULT_SIZE  # Image generation size
+    n: int = 1  # Number of images to generate
+
+
+class ChatCompletionChoice(BaseModel):
+    index: int
+    message: dict
+    finish_reason: str
+
+
+class ChatCompletionUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
 
 
 class ChatCompletionResponse(BaseModel):
@@ -133,8 +162,8 @@ class ChatCompletionResponse(BaseModel):
     object: str = "chat.completion"
     created: int
     model: str
-    choices: list[dict]
-    usage: dict
+    choices: list[ChatCompletionChoice]
+    usage: ChatCompletionUsage
 
 
 # ==================== Workflow Manager ====================
@@ -370,7 +399,7 @@ async def lifespan(app: FastAPI):
     # Startup banner
     print("")
     print("========================================")
-    print("  ComfyUI API Bridge v2.0 (Phase 1)")
+    print("  ComfyUI API Bridge v2.0 (Phase 2)")
     print("========================================")
     print(f"  ComfyUI:  {COMFYUI_URL}")
     print(f"  API Key:  {API_KEY[:15]}...")
@@ -383,6 +412,7 @@ async def lifespan(app: FastAPI):
     print(
         f"  Defaults: size={DEFAULT_SIZE}, n={DEFAULT_N}, strength={DEFAULT_STRENGTH}"
     )
+    print(f"  Sizes: {', '.join(SUPPORTED_SIZES)}")
     print("========================================")
 
     yield
@@ -449,6 +479,13 @@ async def generate_images(
     if workflow_manager.txt2img_template is None:
         raise HTTPException(status_code=500, detail="txt2img workflow not configured")
 
+    # Validate response_format
+    if request.response_format != "b64_json":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}. URL format is not yet implemented.",
+        )
+
     # Parse and validate parameters
     width, height = parse_size(request.size)
     n = clamp_n(request.n)
@@ -498,6 +535,13 @@ async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)
 
     if workflow_manager.img2img_template is None:
         raise HTTPException(status_code=500, detail="img2img workflow not configured")
+
+    # Validate response_format
+    if request.response_format != "b64_json":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only 'b64_json' response_format is supported. Got: {request.response_format}. URL format is not yet implemented.",
+        )
 
     # Validate image data
     try:
@@ -671,13 +715,103 @@ async def reload_workflows(authorization: str = Header(None)):
 async def chat_completions(
     request: ChatCompletionRequest, authorization: str = Header(None)
 ):
-    """Chat completions endpoint (placeholder for future implementation)"""
+    """Chat completions endpoint - generates images based on conversation"""
     verify_api_key(authorization)
 
-    # Phase 1: Return placeholder response
-    raise HTTPException(
-        status_code=501,
-        detail="Chat completions with image generation will be implemented in a future phase. Currently only /v1/images/* endpoints are supported.",
+    if workflow_manager.txt2img_template is None:
+        raise HTTPException(status_code=500, detail="txt2img workflow not configured")
+
+    # Validate messages
+    if not request.messages or len(request.messages) == 0:
+        raise HTTPException(status_code=400, detail="Messages list cannot be empty")
+
+    # Extract prompt from messages - concatenate all user and system messages
+    prompt_parts = []
+    for msg in request.messages:
+        if isinstance(msg.content, str):
+            if msg.role in ["user", "system"]:
+                prompt_parts.append(msg.content)
+        elif isinstance(msg.content, list):
+            # Handle content as list (multimodal format)
+            for item in msg.content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    prompt_parts.append(item.get("text", ""))
+
+    if not prompt_parts:
+        raise HTTPException(status_code=400, detail="No text content found in messages")
+
+    prompt = " ".join(prompt_parts).strip()
+
+    # Parse and validate parameters
+    width, height = parse_size(request.size)
+    n = clamp_n(request.n)
+
+    print(f"[chat/completions] prompt='{prompt[:50]}...', size={width}x{height}, n={n}")
+
+    # Generate image using txt2img
+    generated_images = []
+
+    for i in range(n):
+        seed = int(time.time() * 1000 + i) % (2**32)
+        workflow = workflow_manager.prepare_txt2img(
+            prompt=prompt, width=width, height=height, seed=seed
+        )
+
+        prompt_id = await comfyui_client.queue_prompt(workflow)
+        print(
+            f"[chat/completions] Task {i + 1}/{n}: prompt_id={prompt_id}, seed={seed}"
+        )
+
+        result = await comfyui_client.wait_for_completion(prompt_id)
+
+        outputs = result.get("outputs", {})
+        for node_id, node_output in outputs.items():
+            if "images" in node_output:
+                for img_info in node_output["images"]:
+                    image_data = await comfyui_client.get_image(
+                        filename=img_info["filename"],
+                        subfolder=img_info.get("subfolder", ""),
+                        folder_type=img_info.get("type", "output"),
+                    )
+                    b64_data = base64.b64encode(image_data).decode("utf-8")
+                    generated_images.append(b64_data)
+                    break
+            if generated_images:
+                break
+
+    if not generated_images:
+        raise HTTPException(status_code=500, detail="Failed to generate image")
+
+    # Build OpenAI-compatible response
+    completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+
+    # Construct message content with image and text
+    message_content = [
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{generated_images[0]}"},
+        },
+        {"type": "text", "text": f"Generated image for: {prompt}"},
+    ]
+
+    choice = ChatCompletionChoice(
+        index=0,
+        message={"role": "assistant", "content": message_content},
+        finish_reason="stop",
+    )
+
+    usage = ChatCompletionUsage(
+        prompt_tokens=0,  # TODO: Implement token counting
+        completion_tokens=0,
+        total_tokens=0,
+    )
+
+    return ChatCompletionResponse(
+        id=completion_id,
+        created=int(time.time()),
+        model=request.model,
+        choices=[choice],
+        usage=usage,
     )
 
 
