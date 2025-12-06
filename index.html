@@ -13,20 +13,20 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             min-height: 100vh;
             padding: 20px;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             background: white;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow: hidden;
             display: grid;
-            grid-template-columns: 300px 1fr;
+            grid-template-columns: 380px 1fr;
             min-height: calc(100vh - 40px);
         }
 
@@ -37,13 +37,32 @@
             padding: 30px 20px;
             display: flex;
             flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: #1a202c;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: #718096;
         }
 
         .logo {
             font-size: 24px;
             font-weight: bold;
             margin-bottom: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -91,13 +110,13 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             color: white;
         }
 
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
         }
 
         .btn-secondary {
@@ -161,6 +180,36 @@
             font-size: 14px;
             color: #a0aec0;
             margin-bottom: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            user-select: none;
+        }
+
+        .mode-section h3:hover {
+            color: #cbd5e0;
+        }
+
+        .mode-section h3::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .mode-section h3.collapsed::after {
+            transform: rotate(-90deg);
+        }
+
+        .mode-section-content {
+            max-height: 500px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .mode-section-content.collapsed {
+            max-height: 0;
         }
 
         .mode-tabs {
@@ -183,11 +232,11 @@
 
         .mode-tab:hover {
             background: #2d3748;
-            border-color: #667eea;
+            border-color: #6366f1;
         }
 
         .mode-tab.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             color: white;
             border-color: transparent;
         }
@@ -256,7 +305,7 @@
         .form-group textarea:focus,
         .form-group select:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #6366f1;
         }
 
         .form-group textarea {
@@ -319,6 +368,12 @@
             width: 100%;
             display: block;
             background: #f7fafc;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .gallery-item img:hover {
+            transform: scale(1.02);
         }
 
         .gallery-item-info {
@@ -331,8 +386,23 @@
             margin-bottom: 10px;
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .gallery-item-prompt:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: #6366f1;
+        }
+
+        .gallery-item-prompt:active {
+            background: rgba(99, 102, 241, 0.2);
+            transform: scale(0.98);
         }
 
         .gallery-item-meta {
@@ -356,13 +426,13 @@
         }
 
         .btn-download {
-            background: #667eea;
+            background: #6366f1;
             color: white;
             flex: 1;
         }
 
         .btn-download:hover {
-            background: #5568d3;
+            background: #4f46e5;
         }
 
         .btn-copy {
@@ -400,6 +470,216 @@
             margin-bottom: 16px;
         }
 
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(99, 102, 241, 0.95);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 14px;
+            z-index: 10000;
+            animation: slideInUp 0.3s ease-out;
+        }
+
+        .toast.hide {
+            animation: slideOutDown 0.3s ease-out forwards;
+        }
+
+        @keyframes slideInUp {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutDown {
+            from {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+        }
+
+        /* Resolution Cards */
+        .resolution-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .resolution-grid.sidebar-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        /* Image Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            animation: fadeIn 0.3s;
+        }
+
+        .lightbox.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+            animation: zoomIn 0.3s;
+        }
+
+        .lightbox-content img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 36px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+        }
+
+        .lightbox-close:hover {
+            opacity: 0.7;
+        }
+
+        .lightbox-info {
+            position: absolute;
+            bottom: -80px;
+            left: 0;
+            right: 0;
+            color: white;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .lightbox-info div {
+            margin-bottom: 5px;
+        }
+
+        .lightbox-info div:last-child {
+            margin-bottom: 0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes zoomIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .resolution-card {
+            background: #1a202c;
+            border: 2px solid #4a5568;
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .resolution-card:hover {
+            border-color: #6366f1;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .resolution-card.selected {
+            border-color: #6366f1;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+        }
+
+        .resolution-visual {
+            width: 100%;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 6px;
+        }
+
+        .resolution-box {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 4px;
+        }
+
+        .resolution-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 3px;
+        }
+
+        .resolution-ratio {
+            font-size: 10px;
+            color: #a0aec0;
+        }
+
+        .resolution-category {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a5568;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .resolution-category:first-child {
+            margin-top: 0;
+        }
+
+        .toggle-advanced {
+            font-size: 13px;
+            color: #6366f1;
+            cursor: pointer;
+            text-decoration: underline;
+            margin-top: 10px;
+            display: inline-block;
+        }
+
+        .toggle-advanced:hover {
+            color: #4f46e5;
+        }
+
         @media (max-width: 768px) {
             .container {
                 grid-template-columns: 1fr;
@@ -411,6 +691,10 @@
 
             .gallery {
                 grid-template-columns: 1fr;
+            }
+
+            .resolution-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             }
         }
     </style>
@@ -437,17 +721,102 @@
             </div>
 
             <div class="mode-section">
-                <h3>Generation Mode</h3>
-                <div class="mode-tabs">
-                    <div class="mode-tab active" onclick="switchMode('txt2img')" data-mode="txt2img">
-                        📝 Text to Image
+                <h3 onclick="toggleSection(this)">🎯 Generation Mode</h3>
+                <div class="mode-section-content">
+                    <div class="mode-tabs">
+                        <div class="mode-tab active" onclick="switchMode('txt2img')" data-mode="txt2img">
+                            📝 Text to Image
+                        </div>
+                        <div class="mode-tab" onclick="switchMode('chat')" data-mode="chat">
+                            💬 Chat Completion
+                        </div>
+                        <div class="mode-tab disabled" title="Backend model not available">
+                            🎨 Image to Image (Soon)
+                        </div>
                     </div>
-                    <div class="mode-tab" onclick="switchMode('chat')" data-mode="chat">
-                        💬 Chat Completion
+                </div>
+            </div>
+
+            <div class="mode-section">
+                <h3 onclick="toggleSection(this)">📐 Image Size</h3>
+                <div class="mode-section-content">
+                    <input type="hidden" id="sidebarSize" value="1024x1024">
+                    <div class="resolution-grid sidebar-grid" id="sidebarResolutionGrid">
+                        <!-- Populated by JavaScript -->
                     </div>
-                    <div class="mode-tab disabled" title="Backend model not available">
-                        🎨 Image to Image (Coming Soon)
-                    </div>
+                    <a class="toggle-advanced" onclick="toggleAdvancedResolutionsSidebar()" style="font-size: 11px;">
+                        📋 Show full size list
+                    </a>
+                    <select id="sidebarSizeDropdown" style="display: none; width: 100%; margin-top: 10px; padding: 8px; border-radius: 6px; background: #1a202c; color: white; border: 1px solid #4a5568;">
+                        <optgroup label="Small (512px)">
+                            <option value="512x512">512x512</option>
+                            <option value="512x768">512x768</option>
+                            <option value="768x512">768x512</option>
+                        </optgroup>
+                        <optgroup label="Medium (768-1024px)">
+                            <option value="576x1024">576x1024</option>
+                            <option value="1024x576">1024x576</option>
+                            <option value="768x768">768x768</option>
+                            <option value="768x1024">768x1024</option>
+                            <option value="1024x768">1024x768</option>
+                            <option value="768x1344">768x1344</option>
+                            <option value="1344x768">1344x768</option>
+                            <option value="1024x1024" selected>1024x1024</option>
+                        </optgroup>
+                        <optgroup label="Large (1536px)">
+                            <option value="1024x1536">1024x1536</option>
+                            <option value="1536x1024">1536x1024</option>
+                            <option value="1152x1536">1152x1536</option>
+                            <option value="1536x1152">1536x1152</option>
+                            <option value="1536x1536">1536x1536</option>
+                        </optgroup>
+                        <optgroup label="Extra Large (2048px)">
+                            <option value="1024x2048">1024x2048</option>
+                            <option value="2048x1024">2048x1024</option>
+                            <option value="1536x2048">1536x2048</option>
+                            <option value="2048x1536">2048x1536</option>
+                            <option value="2048x2048">2048x2048</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mode-section">
+                <h3 onclick="toggleSection(this)">⚙️ Generation Options</h3>
+                <div class="mode-section-content">
+                    <label>Seed (optional)</label>
+                    <input type="number" id="sidebarSeed" placeholder="Random" min="0" max="4294967295" style="width: 100%; padding: 8px; border-radius: 6px; background: #1a202c; color: white; border: 1px solid #4a5568; margin-bottom: 10px;">
+                    
+                    <label>Number of Images (1-4)</label>
+                    <input type="number" id="sidebarN" value="1" min="1" max="4" style="width: 100%; padding: 8px; border-radius: 6px; background: #1a202c; color: white; border: 1px solid #4a5568;">
+                    <div class="help-text">Generated concurrently</div>
+                </div>
+            </div>
+
+            <div class="mode-section">
+                <h3 onclick="toggleSection(this)">✨ Prompt Optimizer</h3>
+                <div class="mode-section-content">
+                    <label>API Endpoint</label>
+                    <input type="text" id="optimizerEndpoint" placeholder="https://api.example.com" value="" style="width: 100%; padding: 8px; border-radius: 6px; background: #1a202c; color: white; border: 1px solid #4a5568; margin-bottom: 10px;">
+                    
+                    <label>API Key</label>
+                    <input type="password" id="optimizerKey" placeholder="sk-..." value="" style="width: 100%; padding: 8px; border-radius: 6px; background: #1a202c; color: white; border: 1px solid #4a5568; margin-bottom: 10px;">
+                    
+                    <label>Model</label>
+                    <input type="text" id="optimizerModel" placeholder="gpt-4" value="gpt-4" style="width: 100%; padding: 8px; border-radius: 6px; background: #1a202c; color: white; border: 1px solid #4a5568; margin-bottom: 10px;">
+                    
+                    <button class="btn btn-secondary" onclick="saveOptimizerSettings()">
+                        💾 Save Settings
+                    </button>
+                </div>
+            </div>
+
+            <div class="mode-section">
+                <h3 onclick="toggleSection(this)">🖼️ Gallery</h3>
+                <div class="mode-section-content">
+                    <button class="btn btn-secondary" onclick="clearGallery()">
+                        🗑️ Clear All Images
+                    </button>
                 </div>
             </div>
         </div>
@@ -461,106 +830,43 @@
 
             <!-- Text to Image Form -->
             <div id="txt2imgForm" class="form-section">
-                <div class="alert alert-info">
-                    Only <strong>b64_json</strong> response format is supported. Images are returned as base64-encoded data.
-                </div>
-
                 <div class="form-group">
                     <label>Prompt</label>
-                    <textarea id="txt2imgPrompt" placeholder="Describe the image you want to generate...">a beautiful landscape with mountains and a lake at sunset, highly detailed, digital art</textarea>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Size</label>
-                        <select id="txt2imgSize">
-                            <optgroup label="Small (512px)">
-                                <option value="512x512">512x512 (Square - Fast)</option>
-                                <option value="512x768">512x768 (Portrait)</option>
-                                <option value="768x512">768x512 (Landscape)</option>
-                            </optgroup>
-                            <optgroup label="Medium (768-1024px)">
-                                <option value="576x1024">576x1024 (Portrait 9:16)</option>
-                                <option value="1024x576">1024x576 (Landscape 16:9)</option>
-                                <option value="768x768">768x768 (Square)</option>
-                                <option value="768x1024">768x1024 (Portrait 3:4)</option>
-                                <option value="1024x768">1024x768 (Landscape 4:3)</option>
-                                <option value="768x1344">768x1344 (Portrait)</option>
-                                <option value="1344x768">1344x768 (Landscape)</option>
-                                <option value="1024x1024" selected>1024x1024 (Square - Standard)</option>
-                            </optgroup>
-                            <optgroup label="Large (1536px)">
-                                <option value="1024x1536">1024x1536 (Portrait 2:3)</option>
-                                <option value="1536x1024">1536x1024 (Landscape 3:2)</option>
-                                <option value="1152x1536">1152x1536 (Portrait 3:4)</option>
-                                <option value="1536x1152">1536x1152 (Landscape 4:3)</option>
-                                <option value="1536x1536">1536x1536 (Square - Max)</option>
-                            </optgroup>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Number of Images (1-4)</label>
-                        <input type="number" id="txt2imgN" value="1" min="1" max="4">
-                        <div class="help-text">Generated concurrently (max 4)</div>
-                    </div>
+                    <textarea id="txt2imgPrompt" placeholder="Describe the image you want to generate..." style="min-height: 120px;">a beautiful landscape with mountains and a lake at sunset, highly detailed, digital art</textarea>
+                    <button class="btn btn-secondary" onclick="optimizePrompt('txt2img')" style="margin-top: 8px; width: auto; padding: 8px 16px;">
+                        ✨ Optimize Prompt
+                    </button>
                 </div>
 
                 <button class="btn btn-primary" onclick="generateText2Image()" id="txt2imgBtn">
-                    Generate Images
+                    🎨 Generate Images
                 </button>
+                
+                <div class="alert alert-info" style="margin-top: 15px;">
+                    💡 Configure size, seed, and other options in the left sidebar
+                </div>
             </div>
 
             <!-- Chat Completion Form -->
             <div id="chatForm" class="form-section" style="display: none;">
-                <div class="alert alert-warning">
-                    Chat completions only support <strong>n=1</strong>. For multiple images, use Text to Image mode.
-                </div>
-
                 <div class="form-group">
                     <label>Message</label>
-                    <textarea id="chatPrompt" placeholder="Describe the image you want to generate...">Generate an image of a futuristic city at night with neon lights</textarea>
-                    <div class="help-text">Your message will be sent to the chat API to generate an image</div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Size</label>
-                        <select id="chatSize">
-                            <optgroup label="Small (512px)">
-                                <option value="512x512">512x512 (Square - Fast)</option>
-                                <option value="512x768">512x768 (Portrait)</option>
-                                <option value="768x512">768x512 (Landscape)</option>
-                            </optgroup>
-                            <optgroup label="Medium (768-1024px)">
-                                <option value="576x1024">576x1024 (Portrait 9:16)</option>
-                                <option value="1024x576">1024x576 (Landscape 16:9)</option>
-                                <option value="768x768">768x768 (Square)</option>
-                                <option value="768x1024">768x1024 (Portrait 3:4)</option>
-                                <option value="1024x768">1024x768 (Landscape 4:3)</option>
-                                <option value="768x1344">768x1344 (Portrait)</option>
-                                <option value="1344x768">1344x768 (Landscape)</option>
-                                <option value="1024x1024" selected>1024x1024 (Square - Standard)</option>
-                            </optgroup>
-                            <optgroup label="Large (1536px)">
-                                <option value="1024x1536">1024x1536 (Portrait 2:3)</option>
-                                <option value="1536x1024">1536x1024 (Landscape 3:2)</option>
-                                <option value="1152x1536">1152x1536 (Portrait 3:4)</option>
-                                <option value="1536x1152">1536x1152 (Landscape 4:3)</option>
-                                <option value="1536x1536">1536x1536 (Square - Max)</option>
-                            </optgroup>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Model</label>
-                        <input type="text" id="chatModel" value="z-image-turbo" readonly>
-                    </div>
+                    <textarea id="chatPrompt" placeholder="Describe the image you want to generate..." style="min-height: 120px;">Generate an image of a futuristic city at night with neon lights</textarea>
+                    <button class="btn btn-secondary" onclick="optimizePrompt('chat')" style="margin-top: 8px; width: auto; padding: 8px 16px;">
+                        ✨ Optimize Prompt
+                    </button>
                 </div>
 
                 <button class="btn btn-primary" onclick="generateChatImage()" id="chatBtn">
-                    Generate Image
+                    💬 Generate Image
                 </button>
+                
+                <div class="alert alert-warning" style="margin-top: 15px;">
+                    ⚠️ Chat mode only supports single image generation (n=1)
+                </div>
+                <div class="alert alert-info" style="margin-top: 10px;">
+                    💡 Configure size, seed in the left sidebar
+                </div>
             </div>
 
             <!-- Gallery -->
@@ -579,9 +885,334 @@
         </div>
     </div>
 
+    <!-- Image Lightbox -->
+    <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+        <div class="lightbox-content" onclick="event.stopPropagation()">
+            <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+            <img id="lightboxImage" src="" alt="Full size image">
+            <div class="lightbox-info" id="lightboxInfo"></div>
+        </div>
+    </div>
+
     <script>
         let currentMode = 'txt2img';
         let generatedImages = [];
+        const STORAGE_KEY = 'comfyui_gallery';
+        const MAX_STORED_IMAGES = 50; // Limit to prevent storage overflow
+
+        // Resolution presets for quick selection (only 4 most common)
+        const QUICK_RESOLUTIONS = [
+            { size: '512x512', label: '512×512', ratio: 'Fast', width: 40, height: 40 },
+            { size: '1024x1024', label: '1024×1024', ratio: 'Standard', width: 50, height: 50 },
+            { size: '768x1024', label: '768×1024', ratio: 'Portrait', width: 38, height: 50 },
+            { size: '1024x768', label: '1024×768', ratio: 'Landscape', width: 50, height: 38 }
+        ];
+
+        // Toggle sidebar sections
+        function toggleSection(header) {
+            const content = header.nextElementSibling;
+            header.classList.toggle('collapsed');
+            content.classList.toggle('collapsed');
+        }
+
+        // Initialize resolution cards
+        function initResolutionCards() {
+            const grid = document.getElementById('sidebarResolutionGrid');
+            if (!grid) return;
+
+            grid.innerHTML = QUICK_RESOLUTIONS.map(res => `
+                <div class="resolution-card" onclick="selectSidebarResolution('${res.size}')" data-size="${res.size}">
+                    <div class="resolution-visual">
+                        <div class="resolution-box" style="width: ${res.width}px; height: ${res.height}px;"></div>
+                    </div>
+                    <div class="resolution-label">${res.label}</div>
+                    <div class="resolution-ratio">${res.ratio}</div>
+                </div>
+            `).join('');
+
+            // Set default selection
+            selectSidebarResolution('1024x1024');
+        }
+
+        function selectSidebarResolution(size) {
+            const sizeInput = document.getElementById('sidebarSize');
+            if (sizeInput) {
+                sizeInput.value = size;
+            }
+            
+            const grid = document.getElementById('sidebarResolutionGrid');
+            if (grid) {
+                grid.querySelectorAll('.resolution-card').forEach(card => {
+                    if (card.dataset.size === size) {
+                        card.classList.add('selected');
+                    } else {
+                        card.classList.remove('selected');
+                    }
+                });
+            }
+            
+            // Sync dropdown if visible
+            const dropdown = document.getElementById('sidebarSizeDropdown');
+            if (dropdown && dropdown.style.display !== 'none') {
+                dropdown.value = size;
+            }
+        }
+
+        function toggleAdvancedResolutionsSidebar() {
+            const dropdown = document.getElementById('sidebarSizeDropdown');
+            const link = event.target;
+            
+            if (dropdown.style.display === 'none') {
+                dropdown.style.display = 'block';
+                link.innerHTML = '📋 Hide full size list';
+                
+                const currentValue = document.getElementById('sidebarSize').value;
+                dropdown.value = currentValue;
+                
+                dropdown.onchange = function() {
+                    selectSidebarResolution(this.value);
+                };
+            } else {
+                dropdown.style.display = 'none';
+                link.innerHTML = '📋 Show full size list';
+            }
+        }
+
+        // Image Lightbox functions
+        function openLightbox(imageData, index) {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImage = document.getElementById('lightboxImage');
+            const lightboxInfo = document.getElementById('lightboxInfo');
+            
+            lightboxImage.src = imageData.dataUrl;
+            
+            lightboxInfo.innerHTML = `
+                <div><strong>Prompt:</strong> ${imageData.prompt}</div>
+                <div><strong>Size:</strong> ${imageData.size} | <strong>Seed:</strong> ${imageData.seed || 'Random'}</div>
+                <div><strong>Generated:</strong> ${imageData.timestamp}</div>
+                ${imageData.tokens ? `<div><strong>Tokens:</strong> ${imageData.tokens.total_tokens}</div>` : ''}
+            `;
+            
+            lightbox.classList.add('active');
+            
+            // Add keyboard support
+            document.addEventListener('keydown', handleLightboxKeyboard);
+        }
+
+        function closeLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            lightbox.classList.remove('active');
+            
+            // Remove keyboard support
+            document.removeEventListener('keydown', handleLightboxKeyboard);
+        }
+
+        function handleLightboxKeyboard(e) {
+            if (e.key === 'Escape') {
+                closeLightbox();
+            }
+        }
+
+        function selectResolution(mode, size, updateDropdown = true) {
+            const prefix = mode === 'txt2img' ? 'txt2img' : 'chat';
+            const hiddenInput = document.getElementById(`${prefix}Size`);
+            const dropdown = document.getElementById(`${prefix}SizeDropdown`);
+            const grid = document.getElementById(`${prefix}ResolutionGrid`);
+
+            if (hiddenInput) {
+                hiddenInput.value = size;
+            }
+
+            if (updateDropdown && dropdown) {
+                dropdown.value = size;
+            }
+
+            if (grid) {
+                grid.querySelectorAll('.resolution-card').forEach(card => {
+                    if (card.dataset.size === size) {
+                        card.classList.add('selected');
+                    } else {
+                        card.classList.remove('selected');
+                    }
+                });
+            }
+        }
+
+        function toggleAdvancedResolutions(mode) {
+            const prefix = mode === 'txt2img' ? 'txt2img' : 'chat';
+            const dropdown = document.getElementById(`${prefix}SizeDropdown`);
+            const link = event.target;
+
+            if (dropdown.style.display === 'none') {
+                dropdown.style.display = 'block';
+                link.textContent = 'Hide all resolutions';
+                
+                // Sync dropdown with current selection
+                const hiddenInput = document.getElementById(`${prefix}Size`);
+                if (hiddenInput && hiddenInput.value) {
+                    dropdown.value = hiddenInput.value;
+                }
+
+                // Listen to dropdown changes
+                dropdown.onchange = function() {
+                    selectResolution(mode, this.value, false);
+                };
+            } else {
+                dropdown.style.display = 'none';
+                link.textContent = 'Show all resolutions';
+            }
+        }
+
+        // LocalStorage functions
+        function saveToLocalStorage() {
+            try {
+                // Only store essential data, limit images to prevent quota issues
+                const imagesToStore = generatedImages.slice(0, MAX_STORED_IMAGES).map(img => ({
+                    dataUrl: img.dataUrl,
+                    prompt: img.prompt,
+                    size: img.size,
+                    seed: img.seed,
+                    timestamp: img.timestamp
+                }));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(imagesToStore));
+            } catch (e) {
+                console.error('Failed to save to localStorage:', e);
+                if (e.name === 'QuotaExceededError') {
+                    // Try to save fewer images
+                    const reduced = generatedImages.slice(0, Math.floor(MAX_STORED_IMAGES / 2));
+                    try {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(reduced));
+                        alert('Storage limit reached. Only recent images were saved.');
+                    } catch (e2) {
+                        console.error('Still failed after reducing:', e2);
+                    }
+                }
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    generatedImages = JSON.parse(stored);
+                    renderGallery();
+                    console.log(`Loaded ${generatedImages.length} images from storage`);
+                }
+            } catch (e) {
+                console.error('Failed to load from localStorage:', e);
+            }
+        }
+
+        function clearGallery() {
+            if (confirm('Are you sure you want to clear all generated images?')) {
+                generatedImages = [];
+                localStorage.removeItem(STORAGE_KEY);
+                renderGallery();
+            }
+        }
+
+        // Prompt Optimizer functions
+        const OPTIMIZER_STORAGE_KEY = 'comfyui_optimizer_settings';
+
+        function loadOptimizerSettings() {
+            try {
+                const stored = localStorage.getItem(OPTIMIZER_STORAGE_KEY);
+                if (stored) {
+                    const settings = JSON.parse(stored);
+                    document.getElementById('optimizerEndpoint').value = settings.endpoint || '';
+                    document.getElementById('optimizerKey').value = settings.key || '';
+                    document.getElementById('optimizerModel').value = settings.model || 'gpt-4';
+                }
+            } catch (e) {
+                console.error('Failed to load optimizer settings:', e);
+            }
+        }
+
+        function saveOptimizerSettings() {
+            const settings = {
+                endpoint: document.getElementById('optimizerEndpoint').value,
+                key: document.getElementById('optimizerKey').value,
+                model: document.getElementById('optimizerModel').value
+            };
+            localStorage.setItem(OPTIMIZER_STORAGE_KEY, JSON.stringify(settings));
+            // Settings saved automatically to localStorage
+        }
+
+        function toggleOptimizerSettings() {
+            const settingsDiv = document.getElementById('optimizerSettings');
+            if (settingsDiv.style.display === 'none') {
+                settingsDiv.style.display = 'block';
+            } else {
+                settingsDiv.style.display = 'none';
+            }
+        }
+
+        async function optimizePrompt(mode) {
+            const endpoint = document.getElementById('optimizerEndpoint').value;
+            const apiKey = document.getElementById('optimizerKey').value;
+            const model = document.getElementById('optimizerModel').value;
+
+            if (!endpoint || !apiKey) {
+                alert('Please configure the prompt optimizer in Settings first!');
+                toggleOptimizerSettings();
+                return;
+            }
+
+            const promptField = mode === 'txt2img' ? 
+                document.getElementById('txt2imgPrompt') : 
+                document.getElementById('chatPrompt');
+            
+            const originalPrompt = promptField.value.trim();
+            
+            if (!originalPrompt) {
+                alert('Please enter a prompt first!');
+                return;
+            }
+
+            const previousText = promptField.value;
+            promptField.value = 'Optimizing prompt...';
+            promptField.disabled = true;
+
+            try {
+                const response = await fetch(`${endpoint}/v1/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'You are a professional prompt engineer for image generation. Your task is to enhance and optimize user prompts to create better, more detailed image generation prompts. Focus on adding artistic style, lighting, composition, quality enhancers, and technical details while preserving the user\'s core intent. Return ONLY the optimized prompt without explanations.'
+                            },
+                            {
+                                role: 'user',
+                                content: originalPrompt
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 500
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API returned ${response.status}`);
+                }
+
+                const data = await response.json();
+                const optimizedPrompt = data.choices[0].message.content.trim();
+                
+                promptField.value = optimizedPrompt;
+                promptField.disabled = false;
+                
+            } catch (error) {
+                alert(`Failed to optimize prompt: ${error.message}`);
+                promptField.value = previousText;
+                promptField.disabled = false;
+            }
+        }
 
         // Switch between modes
         function switchMode(mode) {
@@ -666,8 +1297,9 @@
             const endpoint = document.getElementById('apiEndpoint').value;
             const apiKey = document.getElementById('apiKey').value;
             const prompt = document.getElementById('txt2imgPrompt').value;
-            const size = document.getElementById('txt2imgSize').value;
-            const n = parseInt(document.getElementById('txt2imgN').value);
+            const size = document.getElementById('sidebarSize').value;
+            const n = parseInt(document.getElementById('sidebarN').value);
+            const seedInput = document.getElementById('sidebarSeed').value;
             const btn = document.getElementById('txt2imgBtn');
 
             if (!prompt.trim()) {
@@ -679,18 +1311,25 @@
             btn.innerHTML = '<span class="loading"></span> Generating...';
 
             try {
+                const requestBody = {
+                    prompt,
+                    size,
+                    n,
+                    response_format: 'b64_json'
+                };
+                
+                // Add seed if provided
+                if (seedInput && seedInput.trim() !== '') {
+                    requestBody.seed = parseInt(seedInput);
+                }
+
                 const response = await fetch(`${endpoint}/v1/images/generations`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey}`
                     },
-                    body: JSON.stringify({
-                        prompt,
-                        size,
-                        n,
-                        response_format: 'b64_json'
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
@@ -701,16 +1340,17 @@
                 const data = await response.json();
                 
                 // Add to gallery
-                data.data.forEach(item => {
+                data.data.forEach((item, index) => {
                     addToGallery({
                         dataUrl: `data:image/png;base64,${item.b64_json}`,
                         prompt: prompt,
                         size: size,
+                        seed: seedInput || 'random',
                         timestamp: new Date().toLocaleString()
                     });
                 });
 
-                alert(`Successfully generated ${data.data.length} image(s)!`);
+                // Images added to gallery automatically
             } catch (error) {
                 alert(`Error: ${error.message}`);
             } finally {
@@ -724,8 +1364,9 @@
             const endpoint = document.getElementById('apiEndpoint').value;
             const apiKey = document.getElementById('apiKey').value;
             const prompt = document.getElementById('chatPrompt').value;
-            const size = document.getElementById('chatSize').value;
-            const model = document.getElementById('chatModel').value;
+            const size = document.getElementById('sidebarSize').value;
+            const model = 'z-image-turbo';
+            const seedInput = document.getElementById('sidebarSeed').value;
             const btn = document.getElementById('chatBtn');
 
             if (!prompt.trim()) {
@@ -737,21 +1378,28 @@
             btn.innerHTML = '<span class="loading"></span> Generating...';
 
             try {
+                const requestBody = {
+                    model,
+                    messages: [
+                        { role: 'user', content: prompt }
+                    ],
+                    size,
+                    n: 1,
+                    stream: false
+                };
+                
+                // Add seed if provided
+                if (seedInput && seedInput.trim() !== '') {
+                    requestBody.seed = parseInt(seedInput);
+                }
+
                 const response = await fetch(`${endpoint}/v1/chat/completions`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey}`
                     },
-                    body: JSON.stringify({
-                        model,
-                        messages: [
-                            { role: 'user', content: prompt }
-                        ],
-                        size,
-                        n: 1,
-                        stream: false
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
@@ -777,10 +1425,11 @@
                         dataUrl: imageUrl,
                         prompt: prompt,
                         size: size,
+                        seed: seedInput || 'random',
                         timestamp: new Date().toLocaleString(),
                         tokens: data.usage
                     });
-                    alert('Image generated successfully!');
+                    // Image added to gallery automatically
                 } else {
                     throw new Error('No image in response');
                 }
@@ -795,6 +1444,7 @@
         // Add image to gallery
         function addToGallery(image) {
             generatedImages.unshift(image);
+            saveToLocalStorage();
             renderGallery();
         }
 
@@ -815,11 +1465,15 @@
 
             gallery.innerHTML = generatedImages.map((img, index) => `
                 <div class="gallery-item">
-                    <img src="${img.dataUrl}" alt="Generated image">
+                    <img src="${img.dataUrl}" alt="Generated image" onclick='openLightbox(${JSON.stringify(img)}, ${index})'>
                     <div class="gallery-item-info">
-                        <div class="gallery-item-prompt" title="${img.prompt}">${img.prompt}</div>
+                        <div class="gallery-item-prompt" 
+                             title="Click to copy: ${img.prompt}" 
+                             onclick="copyPromptText('${img.prompt.replace(/'/g, "\\'")}')"
+                        >${img.prompt}</div>
                         <div class="gallery-item-meta">
-                            ${img.size} • ${img.timestamp}
+                            ${img.size} • Seed: ${img.seed || 'N/A'}<br>
+                            ${img.timestamp}
                             ${img.tokens ? `<br>Tokens: ${img.tokens.total_tokens}` : ''}
                         </div>
                         <div class="gallery-item-actions">
@@ -847,13 +1501,83 @@
         // Copy prompt
         function copyPrompt(index) {
             const img = generatedImages[index];
-            navigator.clipboard.writeText(img.prompt).then(() => {
-                alert('Prompt copied to clipboard!');
+            copyPromptText(img.prompt);
+        }
+
+        function copyPromptText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('✅ Prompt copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showToast('❌ Failed to copy prompt', 'error');
             });
         }
 
-        // Auto test connection on load
+        function showToast(message, type = 'success') {
+            // Remove existing toast if any
+            const existingToast = document.querySelector('.toast');
+            if (existingToast) {
+                existingToast.remove();
+            }
+
+            // Create new toast
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            // Auto remove after 2 seconds
+            setTimeout(() => {
+                toast.classList.add('hide');
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }
+
+        // Resolution card management
+        const quickResolutions = [
+            { value: '512x512', label: '512²', ratio: '1:1', category: 'Fast' },
+            { value: '768x768', label: '768²', ratio: '1:1', category: 'Fast' },
+            { value: '1024x1024', label: '1024²', ratio: '1:1', category: 'Standard' },
+            { value: '512x768', label: '512×768', ratio: '2:3', category: 'Portrait' },
+            { value: '768x1024', label: '768×1024', ratio: '3:4', category: 'Portrait' },
+            { value: '1024x1536', label: '1024×1536', ratio: '2:3', category: 'Portrait' },
+            { value: '768x512', label: '768×512', ratio: '3:2', category: 'Landscape' },
+            { value: '1024x768', label: '1024×768', ratio: '4:3', category: 'Landscape' },
+            { value: '1536x1024', label: '1536×1024', ratio: '3:2', category: 'Landscape' },
+            { value: '1536x1536', label: '1536²', ratio: '1:1', category: 'Large' },
+            { value: '2048x2048', label: '2048²', ratio: '1:1', category: 'Max' }
+        ];
+
+        function createResolutionCard(resolution, mode) {
+            const [w, h] = resolution.value.split('x').map(Number);
+            const aspectRatio = w / h;
+            const boxWidth = aspectRatio >= 1 ? 50 : 30 * aspectRatio;
+            const boxHeight = aspectRatio >= 1 ? 50 / aspectRatio : 30;
+            
+            return `
+                <div class="resolution-card" onclick="selectResolution('${mode}', '${resolution.value}')" data-value="${resolution.value}">
+                    <div class="resolution-visual">
+                        <div class="resolution-box" style="width: ${boxWidth}px; height: ${boxHeight}px;"></div>
+                    </div>
+                    <div class="resolution-label">${resolution.label}</div>
+                    <div class="resolution-ratio">${resolution.category}</div>
+                </div>
+            `;
+        }
+
+        function initializeResolutionCards() {
+            const txt2imgGrid = document.getElementById('txt2imgResolutionGrid');
+            if (txt2imgGrid) {
+                txt2imgGrid.innerHTML = quickResolutions.map(r => createResolutionCard(r, 'txt2img')).join('');
+                selectResolution('txt2img', '1024x1024'); // Select default
+            }
+        }
+
+        // Auto test connection and load gallery on load
         window.addEventListener('load', () => {
+            loadFromLocalStorage();
+            loadOptimizerSettings();
+            initResolutionCards();
             testConnection();
         });
     </script>

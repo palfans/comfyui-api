@@ -45,7 +45,7 @@ DEFAULT_RESPONSE_FORMAT = "b64_json"
 DEFAULT_QUALITY = "standard"
 DEFAULT_STYLE = "natural"
 
-# Supported image sizes (Z-Image-Turbo supports 512-1536 range)
+# Supported image sizes (Extended to support up to 2048x2048)
 SUPPORTED_SIZES = [
     "512x512",
     "512x768",
@@ -63,6 +63,11 @@ SUPPORTED_SIZES = [
     "1152x1536",
     "1536x1152",
     "1536x1536",
+    "1024x2048",
+    "2048x1024",
+    "1536x2048",
+    "2048x1536",
+    "2048x2048",
 ]
 
 # Timeout settings
@@ -76,30 +81,30 @@ MAX_CONCURRENT_GENERATIONS = 4
 def parse_size(size_str: str, strict: bool = False) -> tuple[int, int]:
     """
     Parse size string (e.g., '1024x1024').
-    
+
     Args:
         size_str: Size string in format 'WIDTHxHEIGHT'
         strict: If True, raise ValueError for unsupported sizes. If False, fallback to default.
-    
+
     Returns:
         Tuple of (width, height)
-    
+
     Raises:
         ValueError: If strict=True and size is not supported
     """
     try:
         parts = size_str.lower().split("x")
         if len(parts) != 2:
-            raise ValueError(f"Invalid format")
-        
+            raise ValueError("Invalid format")
+
         width, height = int(parts[0]), int(parts[1])
         if width <= 0 or height <= 0:
-            raise ValueError(f"Width and height must be positive")
-        
+            raise ValueError("Width and height must be positive")
+
         size_normalized = f"{width}x{height}"
         if size_normalized in SUPPORTED_SIZES:
             return width, height
-        
+
         # Size not in supported list
         if strict:
             raise ValueError(
@@ -112,7 +117,7 @@ def parse_size(size_str: str, strict: bool = False) -> tuple[int, int]:
             )
             default_width, default_height = DEFAULT_SIZE.split("x")
             return int(default_width), int(default_height)
-            
+
     except ValueError as e:
         if strict:
             # Check if error message already contains our custom message
@@ -121,7 +126,7 @@ def parse_size(size_str: str, strict: bool = False) -> tuple[int, int]:
             raise ValueError(
                 f"Invalid size format '{size_str}'. Expected format: 'WIDTHxHEIGHT' (e.g., '1024x1024')"
             )
-        
+
         print(f"[WARN] Invalid size '{size_str}', using default {DEFAULT_SIZE}")
         default_width, default_height = DEFAULT_SIZE.split("x")
         return int(default_width), int(default_height)
@@ -165,6 +170,7 @@ class ImageGenerationRequest(BaseModel):
     response_format: str = DEFAULT_RESPONSE_FORMAT
     quality: str = DEFAULT_QUALITY
     style: str = DEFAULT_STYLE
+    seed: Optional[int] = None  # Custom seed for reproducible generation
 
 
 class Img2ImgRequest(BaseModel):
@@ -199,10 +205,13 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = 1.0
     max_tokens: Optional[int] = None
     stream: bool = False
-    
+
     # Extension parameters (not part of OpenAI standard)
-    size: Optional[str] = None  # Image generation size (extension, defaults to 1024x1024)
+    size: Optional[str] = (
+        None  # Image generation size (extension, defaults to 1024x1024)
+    )
     n: Optional[int] = None  # Number of images to generate (extension, defaults to 1)
+    seed: Optional[int] = None  # Custom seed for reproducible generation (extension)
 
 
 class ChatCompletionChoice(BaseModel):
@@ -280,7 +289,7 @@ class WorkflowManager:
                 if node.get("type") == "CLIPTextEncode":
                     return str(node["id"])
             return None
-        
+
         # Handle API workflow format (dict of nodes)
         for node_id, node in workflow.items():
             if node.get("class_type") == "CLIPTextEncode":
@@ -311,7 +320,7 @@ class WorkflowManager:
                 if node_type in ["EmptyLatentImage", "EmptySD3LatentImage"]:
                     return str(node["id"])
             return None
-        
+
         # Handle API workflow format
         for node_id, node in workflow.items():
             if node.get("class_type") == "EmptyLatentImage":
@@ -331,7 +340,7 @@ class WorkflowManager:
             raise ValueError("txt2img workflow not loaded")
 
         workflow = json.loads(json.dumps(self.txt2img_template))
-        
+
         if seed is None:
             seed = int(time.time() * 1000) % (2**32)
 
@@ -340,23 +349,23 @@ class WorkflowManager:
             nodes = workflow["nodes"]
             for node in nodes:
                 node_type = node.get("type")
-                
+
                 # Update prompt
                 if node_type == "CLIPTextEncode":
                     if "widgets_values" in node:
                         node["widgets_values"] = [prompt]
-                
+
                 # Update size
                 elif node_type in ["EmptyLatentImage", "EmptySD3LatentImage"]:
                     if "widgets_values" in node:
                         node["widgets_values"] = [width, height, 1]
-                
+
                 # Update seed
                 elif "KSampler" in node_type:
                     if "widgets_values" in node and len(node["widgets_values"]) > 0:
                         node["widgets_values"][0] = seed
             return workflow
-        
+
         # Handle API workflow format (dict of nodes)
         prompt_node = self.find_prompt_node(workflow)
         if prompt_node and prompt_node in workflow:
@@ -437,7 +446,7 @@ class ComfyUIClient:
         api_workflow = workflow
         if "nodes" in workflow:
             api_workflow = self._convert_ui_to_api_format(workflow)
-        
+
         payload = {"prompt": api_workflow, "client_id": self.client_id}
 
         session = self.session or aiohttp.ClientSession()
@@ -458,53 +467,56 @@ class ComfyUIClient:
         finally:
             if self._owns_session and session:
                 await session.close()
-    
+
     def _convert_ui_to_api_format(self, ui_workflow: dict) -> dict:
         """Convert ComfyUI UI workflow format to API format."""
         api_workflow = {}
         nodes = ui_workflow.get("nodes", [])
         links_array = ui_workflow.get("links", [])
-        
+
         # Skip non-executable node types
         skip_node_types = ["Note", "MarkdownNote", "PrimitiveNode"]
-        
+
         # Build links lookup: link_id -> [source_node_id, source_output_index]
         links_lookup = {}
         for link in links_array:
             if len(link) >= 5:
                 link_id, source_node, source_slot, target_node, target_slot = link[:5]
                 links_lookup[link_id] = [source_node, source_slot]
-        
+
         # Convert each node
         for node in nodes:
             node_id = str(node["id"])
             node_type = node.get("type")
-            
+
             # Skip non-executable nodes
             if node_type in skip_node_types:
                 continue
-            
+
             # Initialize API node
-            api_workflow[node_id] = {
-                "class_type": node_type,
-                "inputs": {}
-            }
-            
+            api_workflow[node_id] = {"class_type": node_type, "inputs": {}}
+
             # Process inputs
             for inp in node.get("inputs", []):
                 input_name = inp.get("name")
                 link_id = inp.get("link")
-                
+
                 if link_id is not None and link_id in links_lookup:
                     # Input from another node
                     source_node_id, source_output_index = links_lookup[link_id]
-                    api_workflow[node_id]["inputs"][input_name] = [str(source_node_id), source_output_index]
-            
+                    api_workflow[node_id]["inputs"][input_name] = [
+                        str(source_node_id),
+                        source_output_index,
+                    ]
+
             # Add widget values as inputs based on node type
             widgets_values = node.get("widgets_values", [])
             if node_type == "CLIPTextEncode" and len(widgets_values) > 0:
                 api_workflow[node_id]["inputs"]["text"] = widgets_values[0]
-            elif node_type in ["EmptyLatentImage", "EmptySD3LatentImage"] and len(widgets_values) >= 3:
+            elif (
+                node_type in ["EmptyLatentImage", "EmptySD3LatentImage"]
+                and len(widgets_values) >= 3
+            ):
                 api_workflow[node_id]["inputs"]["width"] = widgets_values[0]
                 api_workflow[node_id]["inputs"]["height"] = widgets_values[1]
                 api_workflow[node_id]["inputs"]["batch_size"] = widgets_values[2]
@@ -531,7 +543,7 @@ class ComfyUIClient:
                 api_workflow[node_id]["inputs"]["shift"] = widgets_values[0]
             elif node_type == "SaveImage" and len(widgets_values) > 0:
                 api_workflow[node_id]["inputs"]["filename_prefix"] = widgets_values[0]
-        
+
         return api_workflow
 
     async def wait_for_completion(
@@ -695,18 +707,21 @@ async def generate_images(
         width, height = parse_size(request.size, strict=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     n = clamp_n(request.n)
 
-    print(
-        f"[txt2img] prompt='{request.prompt[:50]}...', size={width}x{height}, n={n}"
-    )
+    print(f"[txt2img] prompt='{request.prompt[:50]}...', size={width}x{height}, n={n}")
 
     start_time = time.time()
 
     # Define async generation function for concurrent execution
     async def generate_single_image(index: int):
-        seed = int(time.time() * 1000 + index) % (2**32)
+        # Use custom seed if provided, otherwise generate random seed
+        if request.seed is not None:
+            seed = request.seed
+        else:
+            seed = int(time.time() * 1000 + index) % (2**32)
+
         workflow = workflow_manager.prepare_txt2img(
             prompt=request.prompt, width=width, height=height, seed=seed
         )
@@ -726,9 +741,7 @@ async def generate_images(
                         folder_type=img_info.get("type", "output"),
                     )
                     b64_data = base64.b64encode(image_data).decode("utf-8")
-                    return ImageData(
-                        b64_json=b64_data, revised_prompt=request.prompt
-                    )
+                    return ImageData(b64_json=b64_data, revised_prompt=request.prompt)
         return None
 
     # Execute generations concurrently with limit
@@ -761,11 +774,11 @@ async def generate_images(
 async def edit_images(request: Img2ImgRequest, authorization: str = Header(None)):
     """Image to image (img2img) - OpenAI compatible [PLACEHOLDER]"""
     verify_api_key(authorization)
-    
+
     # img2img backend model not yet available
     raise HTTPException(
         status_code=501,
-        detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available."
+        detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available.",
     )
 
 
@@ -780,11 +793,11 @@ async def img2img_form(
 ):
     """Image to image with form upload [PLACEHOLDER]"""
     verify_api_key(authorization)
-    
+
     # img2img backend model not yet available
     raise HTTPException(
         status_code=501,
-        detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available."
+        detail="Image-to-image (img2img) functionality is not yet implemented. Backend model is not available.",
     )
 
 
@@ -807,9 +820,9 @@ async def health_check():
     if http_session is None or workflow_manager is None:
         return {
             "status": "initializing",
-            "message": "Application is starting up, please retry in a moment"
+            "message": "Application is starting up, please retry in a moment",
         }
-    
+
     comfyui_reachable = False
     comfyui_error = None
 
@@ -863,18 +876,18 @@ async def chat_completions(
     request: ChatCompletionRequest, authorization: str = Header(None)
 ):
     """Chat completions endpoint - generates images based on conversation
-    
+
     Supports standard OpenAI parameters plus optional extension parameters:
     - size (optional): Image dimensions, defaults to 1024x1024
     - n (optional): Number of images, defaults to 1, must be 1 for chat completions
     - stream (optional): Enable streaming response
     """
     verify_api_key(authorization)
-    
+
     # Apply defaults for extension parameters
     size = request.size or DEFAULT_SIZE
     n = request.n or DEFAULT_N
-    
+
     # Chat completions only supports single image generation
     if n != 1:
         raise HTTPException(
@@ -911,17 +924,24 @@ async def chat_completions(
         width, height = parse_size(size, strict=True)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     n = clamp_n(n)
 
-    print(f"[chat/completions] prompt='{prompt[:50]}...', size={width}x{height}, n={n}, stream={request.stream}")
+    print(
+        f"[chat/completions] prompt='{prompt[:50]}...', size={width}x{height}, n={n}, stream={request.stream}"
+    )
 
     # Generate image using txt2img
     async def generate_image():
         generated_images = []
 
         for i in range(n):
-            seed = int(time.time() * 1000 + i) % (2**32)
+            # Use custom seed if provided, otherwise generate random seed
+            if request.seed is not None:
+                seed = request.seed
+            else:
+                seed = int(time.time() * 1000 + i) % (2**32)
+
             workflow = workflow_manager.prepare_txt2img(
                 prompt=prompt, width=width, height=height, seed=seed
             )
@@ -955,9 +975,10 @@ async def chat_completions(
 
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     created = int(time.time())
-    
+
     # Handle streaming response
     if request.stream:
+
         async def stream_generator():
             try:
                 # Send initial chunk with role
@@ -983,7 +1004,9 @@ async def chat_completions(
                     choices=[
                         ChatCompletionChunkChoice(
                             index=0,
-                            delta=ChatCompletionChunkDelta(content="Generating image..."),
+                            delta=ChatCompletionChunkDelta(
+                                content="Generating image..."
+                            ),
                             finish_reason=None,
                         )
                     ],
@@ -995,8 +1018,10 @@ async def chat_completions(
 
                 # Send image as markdown with base64 data URL
                 # This format works with most chat clients
-                image_markdown = f"\n\n![Generated Image](data:image/png;base64,{b64_image})"
-                
+                image_markdown = (
+                    f"\n\n![Generated Image](data:image/png;base64,{b64_image})"
+                )
+
                 chunk = ChatCompletionChunk(
                     id=completion_id,
                     created=created,
@@ -1040,6 +1065,7 @@ async def chat_completions(
             except Exception as e:
                 print(f"[ERROR] Stream error: {e}")
                 import traceback
+
                 traceback.print_exc()
                 error_chunk = {
                     "error": {
