@@ -15,8 +15,10 @@ uv.lock
 
 # Project prompt/config artifacts
 .ai/
+.claude/
+.codex/
 .gemini/
-.github/chatmodes
+.github/agents/
 AGENTS.md
 
 # Temporary files
